@@ -1,0 +1,1088 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Performance Analytics | QuizInsight</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <!-- Custom Style -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .analytics-card {
+            background: #ffffff;
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+            padding: 26px;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.04);
+            margin-bottom: 24px;
+        }
+        .trend-badge {
+            font-size: 0.95rem;
+            padding: 8px 16px;
+            border-radius: 30px;
+            font-weight: 700;
+        }
+    </style>
+</head>
+<body class="bg-light">
+
+    <div class="dashboard-wrapper">
+        <!-- Collapsible Left Sidebar -->
+        {% set active_page = 'analytics' %}
+        {% include 'components/sidebar.html' %}
+
+        <!-- Main Area (Topbar + Content) -->
+        <div class="dashboard-main" id="dashboardMain">
+            {% set page_title = 'Performance Analytics' %}
+            {% include 'components/topbar.html' %}
+
+            <!-- Main Content Container -->
+            <main class="dashboard-content">
+
+        <!-- Breadcrumb Header -->
+        <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+            <div>
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb mb-1 small">
+                        <li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}" class="text-decoration-none">Dashboard</a></li>
+                        <li class="breadcrumb-item active" aria-current="page">Performance Analytics</li>
+                    </ol>
+                </nav>
+                <h3 class="fw-bold text-dark mb-0">Student Performance Analytics</h3>
+                <p class="text-muted small mb-0">Gain actionable, data-driven insights into your score trends, pacing, and subject mastery powered by Pandas.</p>
+            </div>
+            <div class="mt-3 mt-md-0">
+                <a href="{{ url_for('available_quizzes') }}" class="btn btn-primary btn-sm">
+                    <i class="bi bi-play-circle me-1"></i> Take Another Quiz
+                </a>
+            </div>
+        </div>
+
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, msg in messages %}
+                    <div class="alert alert-{{ category if category != 'error' else 'danger' }} alert-dismissible fade show" role="alert">
+                        {{ msg }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        {% if trend.has_data %}
+            <!-- SECTION 1: Performance Trend Analysis -->
+            <div class="analytics-card">
+                <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2 border-bottom pb-3">
+                    <div>
+                        <h4 class="fw-bold text-dark mb-0">
+                            <i class="bi bi-graph-up text-primary me-2"></i>Performance Trend Analysis
+                        </h4>
+                    </div>
+
+                    <!-- Trend Classification Badge -->
+                    <div>
+                        {% if trend.trend_status == 'Improving' %}
+                            <span class="trend-badge bg-success-subtle text-success border border-success">
+                                <i class="bi bi-arrow-up-right-circle-fill me-1"></i> Trajectory: Improving
+                            </span>
+                        {% elif trend.trend_status == 'Declining' %}
+                            <span class="trend-badge bg-danger-subtle text-danger border border-danger">
+                                <i class="bi bi-arrow-down-right-circle-fill me-1"></i> Trajectory: Declining
+                            </span>
+                        {% elif trend.trend_status == 'Stable' %}
+                            <span class="trend-badge bg-info-subtle text-info border border-info">
+                                <i class="bi bi-dash-circle-fill me-1"></i> Trajectory: Stable
+                            </span>
+                        {% else %}
+                            <span class="trend-badge bg-secondary-subtle text-secondary border">
+                                <i class="bi bi-info-circle-fill me-1"></i> {{ trend.trend_status }}
+                            </span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- 3 Metric Indicators -->
+                <div class="row g-3 mb-4">
+                    <div class="col-md-4">
+                        <div class="p-3 bg-light rounded-3 border">
+                            <span class="text-muted small fw-semibold d-block">Overall Average Score</span>
+                            <h3 class="fw-bold text-dark mb-0 mt-1">{{ trend.avg_score }}%</h3>
+                            <small class="text-muted">Calculated across all attempts</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="p-3 bg-light rounded-3 border">
+                            <span class="text-muted small fw-semibold d-block">Score Trajectory Classification</span>
+                            <h3 class="fw-bold text-primary mb-0 mt-1">{{ trend.trend_status }}</h3>
+                            <small class="text-muted">Linear trendline slope analysis</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="p-3 bg-light rounded-3 border">
+                            <span class="text-muted small fw-semibold d-block">Score Trajectory Delta</span>
+                            <h3 class="fw-bold text-dark mb-0 mt-1">{{ trend.improvement_delta }}</h3>
+                            <small class="text-muted">Net change from initial attempt</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Interactive Student Score Performance Trend Chart -->
+                {% if trend.quiz_scores %}
+                    <div class="card border rounded-3 p-3 bg-white shadow-sm mb-4">
+                        <div class="d-flex flex-wrap justify-content-between align-items-center mb-2 gap-2">
+                            <div>
+                                <h6 class="fw-bold text-dark mb-0">
+                                    <i class="bi bi-graph-up text-primary me-2"></i>Student Score Performance Trend
+                                </h6>
+                                <p class="small text-muted mb-0">Chronological score trajectory across completed quiz attempts. Hover or click points for details.</p>
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge bg-primary-subtle text-primary border">
+                                    {{ trend.quiz_scores|length }} Attempt{% if trend.quiz_scores|length != 1 %}s{% endif %}
+                                </span>
+                                <span class="badge bg-success-subtle text-success border">
+                                    Avg: {{ trend.avg_score }}%
+                                </span>
+                            </div>
+                        </div>
+                        <div style="position: relative; height: 350px; width: 100%;">
+                            <canvas id="scoreTrendChart"></canvas>
+                        </div>
+                        <!-- Click Feedback Indicator -->
+                        <div id="trendPointFeedback" class="mt-2 text-center" style="min-height: 28px;"></div>
+                    </div>
+
+                    <!-- Non-JS Fallback -->
+                    <noscript>
+                        <div class="mb-4 text-center">
+                            <div class="p-3 bg-white border rounded-3 shadow-sm d-inline-block w-100">
+                                <img src="data:image/png;base64,{{ trend.chart_base64 }}"
+                                     alt="Student Performance Trend Chart"
+                                     class="img-fluid rounded-2"
+                                     style="max-height: 440px;">
+                            </div>
+                        </div>
+                    </noscript>
+                {% elif trend.chart_base64 %}
+                    <div class="mb-4 text-center">
+                        <div class="p-3 bg-white border rounded-3 shadow-sm d-inline-block w-100">
+                            <img src="data:image/png;base64,{{ trend.chart_base64 }}"
+                                 alt="Student Performance Trend Chart"
+                                 class="img-fluid rounded-2"
+                                 style="max-height: 440px;">
+                        </div>
+                    </div>
+                {% endif %}
+
+                <!-- Chronological Quiz-Wise Scores Table -->
+                <h5 class="fw-bold text-dark mb-3">
+                    <i class="bi bi-list-check text-primary me-2"></i>Chronological Quiz-Wise Scores
+                </h5>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0 border rounded-3">
+                        <thead class="table-light">
+                            <tr class="small text-muted">
+                                <th class="ps-3">Sequence</th>
+                                <th>Quiz Title</th>
+                                <th>Score</th>
+                                <th>Relative to Average</th>
+                                <th>Attempt Date</th>
+                                <th class="text-end pe-3">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for q in trend.quiz_scores %}
+                                <tr>
+                                    <td class="ps-3 fw-bold text-primary">Quiz {{ q.quiz_num }}</td>
+                                    <td class="fw-semibold text-dark">{{ q.quiz_title }}</td>
+                                    <td>
+                                        <span class="fw-bold text-{{ 'success' if q.score >= 70 else ('warning text-dark' if q.score >= 50 else 'danger') }}">
+                                            {{ q.score }}%
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if q.vs_avg == 'Above Average' %}
+                                            <span class="badge bg-success-subtle text-success">
+                                                <i class="bi bi-arrow-up me-1"></i> Above Average
+                                            </span>
+                                        {% elif q.vs_avg == 'Below Average' %}
+                                            <span class="badge bg-danger-subtle text-danger">
+                                                <i class="bi bi-arrow-down me-1"></i> Below Average
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-secondary-subtle text-secondary">
+                                                <i class="bi bi-dash me-1"></i> Average
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="small text-muted">
+                                        {{ q.submitted_at.strftime('%d %b %Y, %I:%M %p') if q.submitted_at else 'Recent' }}
+                                    </td>
+                                    <td class="text-end pe-3">
+                                        <a href="{{ url_for('view_quiz_result', attempt_id=q.attempt_id) }}" class="btn btn-sm btn-outline-primary">
+                                            View Breakdown
+                                        </a>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+            </div>
+
+            <!-- SECTION 2: Time-Based Analysis -->
+            <div class="analytics-card mt-4">
+                <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2 border-bottom pb-3">
+                    <div>
+                        <h4 class="fw-bold text-dark mb-0">
+                            <i class="bi bi-stopwatch text-primary me-2"></i>Time-Based Analysis
+                        </h4>
+                    </div>
+                    <span class="badge bg-light text-secondary border px-3 py-2">
+                        Pacing & Efficiency Metrics
+                    </span>
+                </div>
+
+                <!-- 4 KPI Cards for Time Analysis -->
+                <div class="row g-3 mb-4">
+                    <!-- Total Time -->
+                    <div class="col-sm-6 col-xl-3">
+                        <div class="p-3 bg-light rounded-3 border">
+                            <span class="text-muted small fw-semibold d-block">Total Time Taken</span>
+                            <h3 class="fw-bold text-dark mb-0 mt-1">{{ time_analysis.total_time_formatted }}</h3>
+                            <small class="text-muted">Total seconds: {{ time_analysis.total_time_seconds }}s</small>
+                        </div>
+                    </div>
+
+                    <!-- Average Time -->
+                    <div class="col-sm-6 col-xl-3">
+                        <div class="p-3 bg-light rounded-3 border">
+                            <span class="text-muted small fw-semibold d-block">Average Completion Time</span>
+                            <h3 class="fw-bold text-primary mb-0 mt-1">{{ time_analysis.avg_time_formatted }}</h3>
+                            <small class="text-muted">Per completed quiz</small>
+                        </div>
+                    </div>
+
+                    <!-- Fastest Attempt -->
+                    <div class="col-sm-6 col-xl-3">
+                        <div class="p-3 bg-light rounded-3 border">
+                            <span class="text-muted small fw-semibold d-block">Fastest Attempt</span>
+                            <h3 class="fw-bold text-success mb-0 mt-1">
+                                {{ time_analysis.fastest.time_formatted if time_analysis.fastest else 'N/A' }}
+                            </h3>
+                            <small class="text-truncate d-block text-muted" title="{{ time_analysis.fastest.quiz_title if time_analysis.fastest else '' }}">
+                                {{ time_analysis.fastest.quiz_title if time_analysis.fastest else 'None' }}
+                            </small>
+                        </div>
+                    </div>
+
+                    <!-- Slowest Attempt -->
+                    <div class="col-sm-6 col-xl-3">
+                        <div class="p-3 bg-light rounded-3 border">
+                            <span class="text-muted small fw-semibold d-block">Slowest Attempt</span>
+                            <h3 class="fw-bold text-warning mb-0 mt-1">
+                                {{ time_analysis.slowest.time_formatted if time_analysis.slowest else 'N/A' }}
+                            </h3>
+                            <small class="text-truncate d-block text-muted" title="{{ time_analysis.slowest.quiz_title if time_analysis.slowest else '' }}">
+                                {{ time_analysis.slowest.quiz_title if time_analysis.slowest else 'None' }}
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Interactive Time-Based Analytics Charts -->
+                {% if time_analysis.quiz_time_records %}
+                    <div class="row g-4 mb-4" id="interactiveTimeChartsContainer">
+                        <!-- Graph 1: Completion Time by Quiz -->
+                        <div class="col-lg-6">
+                            <div class="card border rounded-3 p-3 bg-white shadow-sm h-100">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <h6 class="fw-bold text-dark mb-0">
+                                        <i class="bi bi-bar-chart-fill text-primary me-2"></i>Completion Time by Quiz
+                                    </h6>
+                                    <span class="badge bg-warning-subtle text-warning-emphasis border">
+                                        Avg: {{ time_analysis.avg_time_seconds }}s
+                                    </span>
+                                </div>
+                                <p class="small text-muted mb-3">Quiz attempts (1, 2, 3...) vs. completion time in seconds.</p>
+                                <div style="position: relative; height: 320px; width: 100%;">
+                                    <canvas id="completionTimeChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Graph 2: Time Taken vs. Score Achieved (Scatter Plot) -->
+                        <div class="col-lg-6">
+                            <div class="card border rounded-3 p-3 bg-white shadow-sm h-100">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <h6 class="fw-bold text-dark mb-0">
+                                        <i class="bi bi-scatter-chart text-purple me-2" style="color: #8b5cf6;"></i>Time Taken vs. Score Achieved
+                                    </h6>
+                                    <span class="badge bg-purple-subtle text-purple border" style="background: #f3e8ff; color: #7e22ce;">
+                                        Pacing & Score Correlation
+                                    </span>
+                                </div>
+                                <p class="small text-muted mb-3">Hover or click any attempt point to view quiz details and scores.</p>
+                                <div style="position: relative; height: 320px; width: 100%;">
+                                    <canvas id="timeScoreScatterChart"></canvas>
+                                </div>
+                                <!-- Interactive point click detail feedback -->
+                                <div id="scatterPointFeedback" class="mt-2 text-center" style="min-height: 28px;"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Non-JS Fallback -->
+                    <noscript>
+                        <div class="mb-4 text-center">
+                            <div class="p-3 bg-white border rounded-3 shadow-sm d-inline-block w-100">
+                                <img src="data:image/png;base64,{{ time_analysis.chart_base64 }}"
+                                     alt="Time versus Score Analytics Chart"
+                                     class="img-fluid rounded-2"
+                                     style="max-height: 440px;">
+                            </div>
+                        </div>
+                    </noscript>
+                {% elif time_analysis.chart_base64 %}
+                    <div class="mb-4 text-center">
+                        <div class="p-3 bg-white border rounded-3 shadow-sm d-inline-block w-100">
+                            <img src="data:image/png;base64,{{ time_analysis.chart_base64 }}"
+                                 alt="Time versus Score Analytics Chart"
+                                 class="img-fluid rounded-2"
+                                 style="max-height: 440px;">
+                        </div>
+                    </div>
+                {% endif %}
+
+                <!-- Pacing & Question Speed Table -->
+                <h5 class="fw-bold text-dark mb-3">
+                    <i class="bi bi-speedometer text-primary me-2"></i>Pacing & Question Speed Breakdown
+                </h5>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0 border rounded-3">
+                        <thead class="table-light">
+                            <tr class="small text-muted">
+                                <th class="ps-3">Quiz</th>
+                                <th>Quiz Title</th>
+                                <th>Questions</th>
+                                <th>Total Time</th>
+                                <th>Avg Speed / Question</th>
+                                <th>Score Achieved</th>
+                                <th class="text-end pe-3">Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for r in time_analysis.quiz_time_records %}
+                                <tr>
+                                    <td class="ps-3 fw-bold text-primary">Q{{ r.quiz_num }}</td>
+                                    <td class="fw-semibold text-dark">{{ r.quiz_title }}</td>
+                                    <td>{{ r.total_questions }}</td>
+                                    <td>
+                                        <span class="badge bg-light text-dark border">
+                                            <i class="bi bi-clock me-1"></i>{{ r.time_formatted }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="fw-semibold text-secondary small">{{ r.sec_per_question }}s / question</span>
+                                    </td>
+                                    <td>
+                                        <span class="fw-bold text-{{ 'success' if r.score >= 70 else ('warning text-dark' if r.score >= 50 else 'danger') }}">
+                                            {{ r.score }}%
+                                        </span>
+                                    </td>
+                                    <td class="small text-muted text-end pe-3">
+                                        {{ r.submitted_at.strftime('%d %b %Y') if r.submitted_at else 'Recent' }}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+            </div>
+
+            <!-- SECTION 3: Weak Topic Detection & Mastery Analysis -->
+            <div class="analytics-card mt-4">
+                <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2 border-bottom pb-3">
+                    <div>
+                        <h4 class="fw-bold text-dark mb-0">
+                            <i class="bi bi-bullseye text-danger me-2"></i>Weak Topic Detection & Mastery Analysis
+                        </h4>
+                    </div>
+                    <span class="badge bg-light text-secondary border px-3 py-2">
+                        Diagnostic Assessment & Gaps
+                    </span>
+                </div>
+
+                <!-- 4 Summary KPI Cards for Topic Mastery -->
+                <div class="row g-3 mb-4">
+                    <!-- Topics Analyzed -->
+                    <div class="col-sm-6 col-xl-3">
+                        <div class="p-3 bg-light rounded-3 border">
+                            <span class="text-muted small fw-semibold d-block">Topics Analyzed</span>
+                            <h3 class="fw-bold text-dark mb-0 mt-1">{{ weak_analysis.total_topics_analyzed }}</h3>
+                            <small class="text-muted">Distinct concepts evaluated</small>
+                        </div>
+                    </div>
+
+                    <!-- Weak Topics -->
+                    <div class="col-sm-6 col-xl-3">
+                        <div class="p-3 bg-danger-subtle rounded-3 border border-danger-subtle">
+                            <span class="text-danger small fw-semibold d-block">Weak Topics (&lt;40%)</span>
+                            <h3 class="fw-bold text-danger mb-0 mt-1">{{ weak_analysis.weak_topics_count }}</h3>
+                            <small class="text-danger-emphasis">Urgent focus required</small>
+                        </div>
+                    </div>
+
+                    <!-- Needs Practice -->
+                    <div class="col-sm-6 col-xl-3">
+                        <div class="p-3 bg-warning-subtle rounded-3 border border-warning-subtle">
+                            <span class="text-warning-emphasis small fw-semibold d-block">Needs Practice (40-59%)</span>
+                            <h3 class="fw-bold text-warning-emphasis mb-0 mt-1">{{ weak_analysis.needs_practice_count }}</h3>
+                            <small class="text-warning-emphasis">Approaching proficiency</small>
+                        </div>
+                    </div>
+
+                    <!-- Proficient / Strong Mastery -->
+                    <div class="col-sm-6 col-xl-3">
+                        <div class="p-3 bg-success-subtle rounded-3 border border-success-subtle">
+                            <span class="text-success small fw-semibold d-block">Proficient / Mastered (&ge;60%)</span>
+                            <h3 class="fw-bold text-success mb-0 mt-1">{{ weak_analysis.strong_topics_count + weak_analysis.good_topics_count }}</h3>
+                            <small class="text-success-emphasis">Strong conceptual base</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Actionable Alert Banner for Weak Topics -->
+                {% if weak_analysis.weak_topics_count > 0 or weak_analysis.needs_practice_count > 0 %}
+                    <div class="alert alert-warning border-warning-subtle d-flex flex-wrap align-items-center justify-content-between p-3 rounded-3 mb-4 gap-2">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="bi bi-exclamation-triangle-fill text-warning fs-4"></i>
+                            <div>
+                                <span class="fw-bold text-dark d-block">Targeted Improvement Recommended</span>
+                                <span class="small text-muted">
+                                    You have <strong>{{ weak_analysis.weak_topics_count + weak_analysis.needs_practice_count }}</strong> topic(s) performing below the 60% proficiency threshold. Focus on these concepts to rapidly lift overall scores.
+                                </span>
+                            </div>
+                        </div>
+                        <a href="{{ url_for('recommendations_view') }}" class="btn btn-warning btn-sm fw-semibold text-dark px-3">
+                            <i class="bi bi-lightning-charge me-1"></i> Practice Recommendations
+                        </a>
+                    </div>
+                {% else %}
+                    <div class="alert alert-success border-success-subtle d-flex align-items-center p-3 rounded-3 mb-4 gap-2">
+                        <i class="bi bi-check-circle-fill text-success fs-4"></i>
+                        <div>
+                            <span class="fw-bold text-dark d-block">Outstanding Topic Mastery!</span>
+                            <span class="small text-muted">
+                                All analyzed topics are performing above the proficiency benchmark. Keep up the consistent practice!
+                            </span>
+                        </div>
+                    </div>
+                {% endif %}
+
+                <!-- Topic Mastery Bar Chart -->
+                {% if weak_analysis.chart_base64 %}
+                    <div class="mb-4 text-center">
+                        <div class="p-3 bg-white border rounded-3 shadow-sm d-inline-block w-100">
+                            <img src="data:image/png;base64,{{ weak_analysis.chart_base64 }}"
+                                 alt="Topic Mastery & Accuracy Breakdown Chart"
+                                 class="img-fluid rounded-2"
+                                 style="max-height: 520px;">
+                        </div>
+                    </div>
+                {% endif %}
+
+                <!-- Detailed Topic Mastery Table -->
+                <h5 class="fw-bold text-dark mb-3">
+                    <i class="bi bi-table text-primary me-2"></i>Topic Accuracy & Mastery Breakdown
+                </h5>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0 border rounded-3">
+                        <thead class="table-light">
+                            <tr class="small text-muted">
+                                <th class="ps-3">Topic</th>
+                                <th>Subject</th>
+                                <th>Questions</th>
+                                <th>Correct</th>
+                                <th style="width: 200px;">Accuracy</th>
+                                <th>Mastery Level</th>
+                                <th class="text-end pe-3">Recommended Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for t in weak_analysis.all_topics %}
+                                <tr>
+                                    <td class="ps-3 fw-bold text-dark">
+                                        {{ t.topic_name }}
+                                        {% if t.mastery_level == 'Weak Topic' %}
+                                            <i class="bi bi-exclamation-circle text-danger ms-1" title="Urgent: Weak Topic"></i>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-light text-dark border">{{ t.subject_name }}</span>
+                                    </td>
+                                    <td>{{ t.total_questions }}</td>
+                                    <td>
+                                        <span class="fw-semibold text-success">{{ t.correct_answers }}</span> / {{ t.total_questions }}
+                                    </td>
+                                    <td>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <div class="progress flex-grow-1" style="height: 8px;">
+                                                <div class="progress-bar bg-{{ t.badge_class }}" role="progressbar" style="width: {{ t.accuracy }}%;"></div>
+                                            </div>
+                                            <span class="small fw-bold text-{{ t.badge_class }}">{{ t.accuracy }}%</span>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-{{ t.badge_class }}-subtle text-{{ t.badge_class }} px-2 py-1">
+                                            {{ t.mastery_level }}
+                                        </span>
+                                    </td>
+                                    <td class="text-end pe-3">
+                                        {% if t.mastery_level == 'Weak Topic' or t.mastery_level == 'Needs Practice' %}
+                                            <a href="{{ url_for('generate_ai_quiz') }}" class="btn btn-sm btn-outline-danger">
+                                                <i class="bi bi-cpu me-1"></i> Practice Topic
+                                            </a>
+                                        {% else %}
+                                            <a href="{{ url_for('available_quizzes') }}" class="btn btn-sm btn-outline-secondary">
+                                                <i class="bi bi-arrow-repeat me-1"></i> Review
+                                            </a>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+            </div>
+
+        {% else %}
+            <!-- Zero State: No quiz data yet -->
+            <div class="analytics-card text-center py-5">
+                <i class="bi bi-graph-up fs-1 text-muted d-block mb-3"></i>
+                <h4 class="fw-bold text-dark">No Quiz Performance Data Found</h4>
+                <p class="text-muted small max-w-sm mx-auto mb-4">
+                    Complete your first quiz to generate performance trend charts, trajectory classification, and score progression analysis.
+                </p>
+                <a href="{{ url_for('available_quizzes') }}" class="btn btn-primary px-4 fw-semibold">
+                    <i class="bi bi-play-circle me-1"></i> Start a Quiz Now
+                </a>
+            </div>
+        {% endif %}
+
+            </main>
+        </div>
+    </div>
+
+    <!-- Bootstrap 5 JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Collapsible Sidebar Controller -->
+    <script src="{{ url_for('static', filename='js/sidebar.js') }}"></script>
+
+    <!-- Chart.js Library -->
+    <script src="{{ url_for('static', filename='js/chart.min.js') }}"></script>
+
+    <!-- Performance Analytics Interactive Charts Initialization -->
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const trendScores = {{ trend.quiz_scores|tojson if trend and trend.quiz_scores else '[]' }};
+        const avgScoreValue = {{ trend.avg_score|tojson if trend and trend.avg_score is defined else '0' }};
+
+        const timeRecords = {{ time_analysis.quiz_time_records|tojson if time_analysis and time_analysis.quiz_time_records else '[]' }};
+        const avgSeconds = {{ time_analysis.avg_time_seconds|tojson if time_analysis and time_analysis.avg_time_seconds is defined else '0' }};
+
+        // -------------------------------------------------------------
+        // 0. Student Score Performance Trend (Interactive Trend Line)
+        // -------------------------------------------------------------
+        const ctxTrend = document.getElementById('scoreTrendChart');
+        if (ctxTrend && typeof Chart !== 'undefined' && trendScores && trendScores.length > 0) {
+            // Requirement 1: Replace quiz titles on the X-axis with simple numeric attempt labels (1, 2, 3...)
+            const trendLabels = trendScores.map(d => String(d.quiz_num));
+            const trendValues = trendScores.map(d => d.score);
+            const isCrowded = trendScores.length > 50;
+            const isMedium = trendScores.length > 25;
+
+            new Chart(ctxTrend, {
+                type: 'line',
+                data: {
+                    labels: trendLabels,
+                    datasets: [
+                        {
+                            label: 'Score Achieved (%)',
+                            data: trendValues,
+                            borderColor: '#2563eb',
+                            backgroundColor: 'rgba(37, 99, 235, 0.08)',
+                            fill: true,
+                            tension: 0.25,
+                            borderWidth: 2.5,
+                            pointRadius: isCrowded ? 4 : (isMedium ? 5 : 6),
+                            pointHoverRadius: isCrowded ? 7 : 9,
+                            pointBackgroundColor: '#3b82f6',
+                            pointBorderColor: '#1d4ed8',
+                            pointBorderWidth: 2,
+                            order: 1
+                        },
+                        {
+                            type: 'line',
+                            label: `Average Score (${avgScoreValue}%)`,
+                            data: Array(trendScores.length).fill(avgScoreValue),
+                            borderColor: '#10b981',
+                            borderWidth: 2,
+                            borderDash: [6, 4],
+                            pointRadius: 0,
+                            pointHoverRadius: 0,
+                            fill: false,
+                            order: 2
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'nearest',
+                        intersect: false
+                    },
+                    onClick: function (evt, elements) {
+                        if (elements && elements.length > 0) {
+                            const el = elements[0];
+                            if (el.datasetIndex === 0) {
+                                const d = trendScores[el.index];
+                                const feedbackEl = document.getElementById('trendPointFeedback');
+                                if (feedbackEl) {
+                                    const timeBadge = (d.time_formatted && d.time_seconds > 0)
+                                        ? ` &bull; Time Taken: <span class="badge bg-secondary-subtle text-secondary">${d.time_formatted}</span>`
+                                        : '';
+                                    feedbackEl.innerHTML = `
+                                        <div class="alert alert-primary py-2 px-3 mb-0 d-inline-flex align-items-center gap-2 rounded-3 shadow-sm text-start">
+                                            <i class="bi bi-graph-up-arrow text-primary fs-5"></i>
+                                            <div>
+                                                <strong>Quiz Attempt #${d.quiz_num}</strong> (ID: ${d.attempt_id}) &bull;
+                                                <strong>${d.quiz_title}</strong> &bull;
+                                                Score: <span class="badge bg-primary-subtle text-primary">${d.score}%</span> &bull;
+                                                Date: <span class="text-muted">${d.submitted_at_formatted || 'N/A'}</span>${timeBadge}
+                                            </div>
+                                        </div>
+                                    `;
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: {
+                                boxWidth: 12,
+                                font: { size: 11, weight: '600' },
+                                color: '#334155'
+                            }
+                        },
+                        tooltip: {
+                            enabled: true,
+                            backgroundColor: 'rgba(15, 23, 42, 0.92)',
+                            titleFont: { size: 12, weight: 'bold' },
+                            bodyFont: { size: 11 },
+                            padding: 10,
+                            cornerRadius: 8,
+                            callbacks: {
+                                title: function (context) {
+                                    if (context[0].datasetIndex === 1) {
+                                        return `Average Score Reference`;
+                                    }
+                                    const d = trendScores[context[0].dataIndex];
+                                    return `Quiz Attempt #${d.quiz_num} (ID: ${d.attempt_id})`;
+                                },
+                                label: function (context) {
+                                    if (context.datasetIndex === 1) {
+                                        return `Average Score: ${avgScoreValue}%`;
+                                    }
+                                    const d = trendScores[context.dataIndex];
+                                    const lines = [
+                                        `Quiz Title: ${d.quiz_title}`,
+                                        `Score Achieved: ${d.score}%`,
+                                        `Attempt Date: ${d.submitted_at_formatted || 'N/A'}`
+                                    ];
+                                    if (d.time_formatted && d.time_seconds > 0) {
+                                        lines.push(`Time Taken: ${d.time_formatted} (${d.time_seconds}s)`);
+                                    } else if (d.time_seconds === 0) {
+                                        lines.push(`Time Taken: 0s`);
+                                    }
+                                    return lines;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Quiz Attempt',
+                                font: { size: 11, weight: 'bold' },
+                                color: '#475569'
+                            },
+                            grid: { display: false },
+                            ticks: {
+                                color: '#64748b',
+                                font: { size: 11, weight: '600' },
+                                autoSkip: true,
+                                maxTicksLimit: 30,
+                                maxRotation: 0
+                            }
+                        },
+                        y: {
+                            min: 0,
+                            max: 105,
+                            title: {
+                                display: true,
+                                text: 'Score (%)',
+                                font: { size: 11, weight: 'bold' },
+                                color: '#475569'
+                            },
+                            grid: { color: '#f1f5f9' },
+                            ticks: {
+                                color: '#64748b',
+                                font: { size: 11 },
+                                callback: val => val + '%'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // -------------------------------------------------------------
+        // 1. Completion Time by Quiz (Bar Chart)
+        // -------------------------------------------------------------
+        const ctxBar = document.getElementById('completionTimeChart');
+        if (ctxBar && typeof Chart !== 'undefined' && timeRecords && timeRecords.length > 0) {
+            // Requirement: Replace Q1, Q2, Q3, Q4... with simple numeric labels: 1, 2, 3, 4, 5, 6...
+            const barLabels = timeRecords.map(r => String(r.quiz_num));
+            const barTimes = timeRecords.map(r => r.time_seconds);
+
+            new Chart(ctxBar, {
+                type: 'bar',
+                data: {
+                    labels: barLabels,
+                    datasets: [
+                        {
+                            label: 'Time Taken (Seconds)',
+                            data: barTimes,
+                            backgroundColor: 'rgba(14, 165, 233, 0.75)',
+                            borderColor: '#0284c7',
+                            borderWidth: 1.5,
+                            borderRadius: 4,
+                            barPercentage: barLabels.length > 20 ? 0.9 : 0.6,
+                            maxBarThickness: 36,
+                            order: 2
+                        },
+                        {
+                            type: 'line',
+                            label: `Average Time (${avgSeconds}s)`,
+                            data: Array(barLabels.length).fill(avgSeconds),
+                            borderColor: '#f59e0b',
+                            borderWidth: 2,
+                            borderDash: [5, 4],
+                            pointRadius: 0,
+                            pointHoverRadius: 0,
+                            fill: false,
+                            order: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: {
+                                boxWidth: 12,
+                                font: { size: 11, weight: '600' },
+                                color: '#334155'
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(15, 23, 42, 0.92)',
+                            titleFont: { size: 12, weight: 'bold' },
+                            bodyFont: { size: 11 },
+                            padding: 10,
+                            cornerRadius: 8,
+                            callbacks: {
+                                title: function(context) {
+                                    const d = timeRecords[context[0].dataIndex];
+                                    return `Quiz Attempt #${d.quiz_num} (ID: ${d.attempt_id})`;
+                                },
+                                label: function(context) {
+                                    if (context.datasetIndex === 1) {
+                                        return `Average Time: ${avgSeconds}s`;
+                                    }
+                                    const d = timeRecords[context.dataIndex];
+                                    return [
+                                        `Quiz Title: ${d.quiz_title}`,
+                                        `Time Taken: ${d.time_seconds}s (${d.time_formatted})`,
+                                        `Score Achieved: ${d.score}%`
+                                    ];
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Quiz Attempt',
+                                font: { size: 11, weight: 'bold' },
+                                color: '#475569'
+                            },
+                            grid: { display: false },
+                            ticks: {
+                                color: '#64748b',
+                                font: { size: 11, weight: '600' },
+                                autoSkip: true,
+                                maxTicksLimit: 30,
+                                maxRotation: 0
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Time Taken (Seconds)',
+                                font: { size: 11, weight: 'bold' },
+                                color: '#475569'
+                            },
+                            grid: { color: '#f1f5f9' },
+                            ticks: {
+                                color: '#64748b',
+                                font: { size: 11 },
+                                callback: val => val + 's'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // -------------------------------------------------------------
+        // 2. Time Taken vs. Score Achieved (Scatter Plot with Trend Line)
+        // -------------------------------------------------------------
+        const ctxScatter = document.getElementById('timeScoreScatterChart');
+        if (ctxScatter && typeof Chart !== 'undefined' && timeRecords && timeRecords.length > 0) {
+            // Count identical coordinates for display jitter
+            const coordCounts = {};
+            timeRecords.forEach(d => {
+                const key = `${d.time_seconds}_${d.score}`;
+                coordCounts[key] = (coordCounts[key] || 0) + 1;
+            });
+
+            const seenCoords = {};
+            const scatterPoints = timeRecords.map(d => {
+                const key = `${d.time_seconds}_${d.score}`;
+                const total = coordCounts[key];
+                const seen = seenCoords[key] || 0;
+                seenCoords[key] = seen + 1;
+
+                let dispX = d.time_seconds;
+                let dispY = d.score;
+
+                // Subtle display jitter for identical coordinates to distinguish overlapping points
+                if (total > 1) {
+                    const angle = (2 * Math.PI / total) * seen;
+                    dispX = Number((d.time_seconds + 0.5 * Math.cos(angle)).toFixed(2));
+                    dispY = Number((d.score + 0.5 * Math.sin(angle)).toFixed(2));
+                }
+
+                return {
+                    x: dispX,
+                    y: dispY,
+                    actual_time: d.time_seconds,
+                    actual_score: d.score,
+                    quiz_num: d.quiz_num,
+                    attempt_id: d.attempt_id,
+                    quiz_title: d.quiz_title,
+                    time_formatted: d.time_formatted
+                };
+            });
+
+            // Trend line linear regression: y = m*x + b
+            const timesArr = timeRecords.map(d => d.time_seconds);
+            const scoresArr = timeRecords.map(d => d.score);
+            let trendDataset = null;
+
+            if (timesArr.length >= 2) {
+                const n = timesArr.length;
+                const sumX = timesArr.reduce((a, b) => a + b, 0);
+                const sumY = scoresArr.reduce((a, b) => a + b, 0);
+                const sumXY = timesArr.reduce((sum, x, i) => sum + x * scoresArr[i], 0);
+                const sumXX = timesArr.reduce((sum, x) => sum + x * x, 0);
+
+                const denom = n * sumXX - sumX * sumX;
+                if (denom !== 0) {
+                    const slope = (n * sumXY - sumX * sumY) / denom;
+                    const intercept = (sumY - slope * sumX) / n;
+
+                    const minX = Math.min(...timesArr);
+                    const maxX = Math.max(...timesArr);
+                    const rangeSpan = maxX === minX ? 5 : 0;
+
+                    const startX = minX - rangeSpan;
+                    const endX = maxX + rangeSpan;
+                    const startY = Number((slope * startX + intercept).toFixed(2));
+                    const endY = Number((slope * endX + intercept).toFixed(2));
+
+                    trendDataset = {
+                        type: 'line',
+                        label: 'Pacing Trend',
+                        data: [
+                            { x: startX, y: startY },
+                            { x: endX, y: endY }
+                        ],
+                        borderColor: '#ec4899',
+                        borderWidth: 2,
+                        borderDash: [6, 4],
+                        pointRadius: 0,
+                        pointHoverRadius: 0,
+                        fill: false,
+                        order: 2
+                    };
+                }
+            }
+
+            const datasets = [
+                {
+                    type: 'scatter',
+                    label: 'Quiz Attempts',
+                    data: scatterPoints,
+                    backgroundColor: 'rgba(139, 92, 246, 0.65)',
+                    borderColor: '#6d28d9',
+                    borderWidth: 1.5,
+                    pointRadius: 6,
+                    pointHoverRadius: 9,
+                    pointHoverBackgroundColor: '#7c3aed',
+                    pointHoverBorderColor: '#4c1d95',
+                    pointHoverBorderWidth: 2,
+                    order: 1
+                }
+            ];
+
+            if (trendDataset) {
+                datasets.push(trendDataset);
+            }
+
+            new Chart(ctxScatter, {
+                data: { datasets: datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    onClick: function (evt, elements) {
+                        if (elements && elements.length > 0) {
+                            const el = elements[0];
+                            if (el.datasetIndex === 0) {
+                                const pt = scatterPoints[el.index];
+                                const feedbackEl = document.getElementById('scatterPointFeedback');
+                                if (feedbackEl) {
+                                    feedbackEl.innerHTML = `
+                                        <div class="alert alert-primary py-2 px-3 mb-0 d-inline-flex align-items-center gap-2 rounded-3 shadow-sm text-start">
+                                            <i class="bi bi-info-circle-fill text-primary fs-5"></i>
+                                            <div>
+                                                <strong>Attempt #${pt.quiz_num}</strong> (ID: ${pt.attempt_id}) &bull;
+                                                <strong>${pt.quiz_title}</strong> &bull;
+                                                Time: <span class="badge bg-primary-subtle text-primary">${pt.actual_time}s</span> &bull;
+                                                Score: <span class="badge bg-success-subtle text-success">${pt.actual_score}%</span>
+                                            </div>
+                                        </div>
+                                    `;
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: {
+                                boxWidth: 12,
+                                font: { size: 11, weight: '600' },
+                                color: '#334155'
+                            }
+                        },
+                        tooltip: {
+                            enabled: true,
+                            backgroundColor: 'rgba(15, 23, 42, 0.92)',
+                            titleFont: { size: 12, weight: 'bold' },
+                            bodyFont: { size: 11 },
+                            padding: 10,
+                            cornerRadius: 8,
+                            callbacks: {
+                                title: function(context) {
+                                    if (context[0].dataset.type === 'line') return 'Pacing Trend Line';
+                                    const raw = context[0].raw;
+                                    return `Quiz Attempt #${raw.quiz_num} (ID: ${raw.attempt_id})`;
+                                },
+                                label: function(context) {
+                                    if (context.dataset.type === 'line') {
+                                        return 'Linear correlation between Time Taken and Score Achieved.';
+                                    }
+                                    const raw = context.raw;
+                                    return [
+                                        `Quiz Title: ${raw.quiz_title}`,
+                                        `Time Taken: ${raw.actual_time} seconds`,
+                                        `Score Achieved: ${raw.actual_score}%`
+                                    ];
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'linear',
+                            title: {
+                                display: true,
+                                text: 'Time Taken (Seconds)',
+                                font: { size: 11, weight: 'bold' },
+                                color: '#475569'
+                            },
+                            grid: { color: '#f1f5f9' },
+                            ticks: {
+                                color: '#64748b',
+                                font: { size: 11 },
+                                callback: val => val + 's'
+                            }
+                        },
+                        y: {
+                            min: 0,
+                            max: 105,
+                            title: {
+                                display: true,
+                                text: 'Score Achieved (%)',
+                                font: { size: 11, weight: 'bold' },
+                                color: '#475569'
+                            },
+                            grid: { color: '#f1f5f9' },
+                            ticks: {
+                                color: '#64748b',
+                                font: { size: 11 },
+                                callback: val => val + '%'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    });
+    </script>
+</body>
+</html>

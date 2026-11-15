@@ -1,0 +1,8 @@
+Flask
+psycopg2-binary
+pandas
+numpy
+matplotlib
+APScheduler
+python-dotenv
+requests

@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Practice Recommendations | QuizInsight</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <!-- Custom Style -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .rec-card {
+            background: #ffffff;
+            border-radius: 16px;
+            padding: 24px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.04);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .rec-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.07);
+        }
+        .rec-card-high {
+            border-left: 5px solid #ef4444;
+        }
+        .rec-card-medium {
+            border-left: 5px solid #f59e0b;
+        }
+        .rec-card-low {
+            border-left: 5px solid #3b82f6;
+        }
+        .summary-metric {
+            background: #ffffff;
+            border-radius: 14px;
+            padding: 20px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+        }
+    </style>
+</head>
+<body class="bg-light">
+
+    <div class="dashboard-wrapper">
+        <!-- Collapsible Left Sidebar -->
+        {% set active_page = 'recommendations' %}
+        {% include 'components/sidebar.html' %}
+
+        <!-- Main Area (Topbar + Content) -->
+        <div class="dashboard-main" id="dashboardMain">
+            {% set page_title = 'Practice Recommendations' %}
+            {% include 'components/topbar.html' %}
+
+            <!-- Main Content Container -->
+            <main class="dashboard-content">
+
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show rounded-3 shadow-sm mb-4" role="alert">
+                        <i class="bi bi-info-circle-fill me-2"></i>{{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <!-- Header -->
+        <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+            <div>
+                <h2 class="fw-bold text-dark mb-1">
+                    <i class="bi bi-lightning-charge-fill text-warning me-2"></i>Personalized Practice Recommendations
+                </h2>
+                <p class="text-muted small mb-0">
+                    AI-driven targeted study plan based on your diagnostic quiz performance and weak topic analysis
+                </p>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="{{ url_for('analytics_view') }}" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-graph-up me-1"></i> View Analytics
+                </a>
+                <a href="{{ url_for('generate_ai_quiz') }}" class="btn btn-primary btn-sm">
+                    <i class="bi bi-cpu me-1"></i> AI Quiz Generator
+                </a>
+            </div>
+        </div>
+
+        <!-- 4 Summary KPI Cards -->
+        <div class="row g-3 mb-4">
+            <!-- Active Recommendations -->
+            <div class="col-sm-6 col-xl-3">
+                <div class="summary-metric">
+                    <span class="text-muted small fw-semibold d-block">Active Recommendations</span>
+                    <h3 class="fw-bold text-dark mb-0 mt-1">{{ recommendations.total_recommendations }}</h3>
+                    <small class="text-muted">Personalized focus areas</small>
+                </div>
+            </div>
+
+            <!-- High Priority -->
+            <div class="col-sm-6 col-xl-3">
+                <div class="summary-metric border-danger-subtle bg-danger-subtle">
+                    <span class="text-danger small fw-semibold d-block">High Priority (&lt;40%)</span>
+                    <h3 class="fw-bold text-danger mb-0 mt-1">{{ recommendations.high_priority_count }}</h3>
+                    <small class="text-danger-emphasis">Urgent conceptual gaps</small>
+                </div>
+            </div>
+
+            <!-- Medium Priority -->
+            <div class="col-sm-6 col-xl-3">
+                <div class="summary-metric border-warning-subtle bg-warning-subtle">
+                    <span class="text-warning-emphasis small fw-semibold d-block">Medium Priority (40-59%)</span>
+                    <h3 class="fw-bold text-warning-emphasis mb-0 mt-1">{{ recommendations.medium_priority_count }}</h3>
+                    <small class="text-warning-emphasis">Approaching proficiency</small>
+                </div>
+            </div>
+
+            <!-- Completed / Mastered -->
+            <div class="col-sm-6 col-xl-3">
+                <div class="summary-metric border-success-subtle bg-success-subtle">
+                    <span class="text-success small fw-semibold d-block">Completed / Mastered</span>
+                    <h3 class="fw-bold text-success mb-0 mt-1">{{ recommendations.completed_recommendations|length }}</h3>
+                    <small class="text-success-emphasis">Resolved practice topics</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- High-Priority Warning Banner -->
+        {% if recommendations.high_priority_count > 0 %}
+            <div class="alert alert-danger border-danger-subtle d-flex flex-wrap align-items-center justify-content-between p-3 rounded-3 mb-4 gap-2">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-shield-exclamation text-danger fs-3"></i>
+                    <div>
+                        <span class="fw-bold text-dark d-block">Urgent Attention Recommended</span>
+                        <span class="small text-muted">
+                            You have <strong>{{ recommendations.high_priority_count }}</strong> topic(s) with accuracy below 40%. Solving the recommended quizzes will create the largest measurable jump in your score.
+                        </span>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+
+        <!-- Active Recommendations Section -->
+        <h4 class="fw-bold text-dark mb-3">
+            <i class="bi bi-card-checklist text-primary me-2"></i>Active Practice Recommendations
+        </h4>
+
+        {% if recommendations.active_recommendations %}
+            <div class="row g-4 mb-5">
+                {% for rec in recommendations.active_recommendations %}
+                    <div class="col-lg-6">
+                        <div class="rec-card rec-card-{{ rec.priority.lower() }} h-100 d-flex flex-column justify-content-between">
+                            <div>
+                                <!-- Top Badges -->
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <div class="d-flex gap-2 align-items-center">
+                                        <span class="badge bg-light text-dark border">
+                                            <i class="bi bi-book me-1"></i>{{ rec.subject_name }}
+                                        </span>
+                                        <span class="badge bg-{{ rec.badge_class }}-subtle text-{{ rec.badge_class }} border border-{{ rec.badge_class }}-subtle fw-semibold">
+                                            {% if rec.priority == 'High' %}
+                                                <i class="bi bi-exclamation-octagon-fill me-1"></i>High Priority
+                                            {% elif rec.priority == 'Medium' %}
+                                                <i class="bi bi-exclamation-triangle-fill me-1"></i>Medium Priority
+                                            {% else %}
+                                                <i class="bi bi-info-circle-fill me-1"></i>Low Priority
+                                            {% endif %}
+                                        </span>
+                                    </div>
+                                    <span class="small text-muted">
+                                        {{ rec.created_at.strftime('%d %b %Y') if rec.created_at else 'Recent' }}
+                                    </span>
+                                </div>
+
+                                <!-- Topic Title -->
+                                <h4 class="fw-bold text-dark mb-2">{{ rec.topic_name }}</h4>
+
+                                <!-- Pedagogical Reason -->
+                                <div class="p-3 bg-light rounded-3 border mb-3">
+                                    <div class="small text-secondary mb-1 fw-semibold">
+                                        <i class="bi bi-lightbulb-fill text-warning me-1"></i> Diagnostic Insight:
+                                    </div>
+                                    <p class="small text-dark mb-0">{{ rec.reason }}</p>
+                                </div>
+
+                                <!-- Recommended Practice Option -->
+                                {% if rec.quiz_id and rec.quiz_title %}
+                                    <div class="mb-3 small text-muted">
+                                        <i class="bi bi-check-circle-fill text-success me-1"></i>
+                                        Matched Existing Quiz: <strong class="text-dark">{{ rec.quiz_title }}</strong>
+                                    </div>
+                                {% else %}
+                                    <div class="mb-3 small text-muted">
+                                        <i class="bi bi-cpu text-primary me-1"></i>
+                                        Custom Practice: Generate an AI Quiz tuned to this topic.
+                                    </div>
+                                {% endif %}
+                            </div>
+
+                            <!-- Action Buttons -->
+                            <div class="d-flex flex-wrap gap-2 pt-3 border-top justify-content-between align-items-center">
+                                <div class="d-flex gap-2">
+                                    {% if rec.quiz_id %}
+                                        <a href="{{ url_for('start_quiz', quiz_id=rec.quiz_id) }}" class="btn btn-primary btn-sm fw-semibold">
+                                            <i class="bi bi-play-circle me-1"></i> Start Quiz
+                                        </a>
+                                    {% endif %}
+                                    <a href="{{ url_for('generate_ai_quiz', subject_id=rec.subject_id, topic_id=rec.topic_id) }}" class="btn btn-outline-primary btn-sm fw-semibold">
+                                        <i class="bi bi-cpu me-1"></i> Generate AI Quiz
+                                    </a>
+                                </div>
+                                <form method="POST" action="{{ url_for('complete_recommendation_route', recommendation_id=rec.recommendation_id) }}" class="d-inline">
+                                    <button type="submit" class="btn btn-outline-success btn-sm" title="Mark this recommendation as completed">
+                                        <i class="bi bi-check-lg me-1"></i> Mark Done
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <!-- Zero State: No active recommendations -->
+            <div class="rec-card text-center py-5 mb-5">
+                <i class="bi bi-trophy text-warning fs-1 d-block mb-3"></i>
+                <h4 class="fw-bold text-dark">All Caught Up! No Active Recommendations</h4>
+                <p class="text-muted small max-w-sm mx-auto mb-4">
+                    Excellent job! You currently have no pending recommendations requiring urgent focus. Keep challenging yourself with new quizzes.
+                </p>
+                <div class="d-flex justify-content-center gap-2">
+                    <a href="{{ url_for('available_quizzes') }}" class="btn btn-primary btn-sm fw-semibold">
+                        <i class="bi bi-collection-play me-1"></i> Explore Available Quizzes
+                    </a>
+                    <a href="{{ url_for('generate_ai_quiz') }}" class="btn btn-outline-primary btn-sm fw-semibold">
+                        <i class="bi bi-cpu me-1"></i> Generate AI Challenge
+                    </a>
+                </div>
+            </div>
+        {% endif %}
+
+        <!-- Completed / Resolved Recommendations Section -->
+        {% if recommendations.completed_recommendations %}
+            <div class="mt-4 pt-3 border-top">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="fw-bold text-dark mb-0">
+                        <i class="bi bi-check2-circle text-success me-2"></i>Completed & Mastered Topics
+                    </h5>
+                    <span class="badge bg-success-subtle text-success">
+                        {{ recommendations.completed_recommendations|length }} Completed
+                    </span>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0 border rounded-3 bg-white">
+                        <thead class="table-light">
+                            <tr class="small text-muted">
+                                <th class="ps-3">Topic</th>
+                                <th>Subject</th>
+                                <th>Initial Diagnostic Insight</th>
+                                <th>Priority</th>
+                                <th class="text-end pe-3">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for c in recommendations.completed_recommendations %}
+                                <tr>
+                                    <td class="ps-3 fw-bold text-dark">{{ c.topic_name }}</td>
+                                    <td>
+                                        <span class="badge bg-light text-dark border">{{ c.subject_name }}</span>
+                                    </td>
+                                    <td class="small text-muted">{{ c.reason }}</td>
+                                    <td>
+                                        <span class="badge bg-secondary-subtle text-secondary">{{ c.priority }}</span>
+                                    </td>
+                                    <td class="text-end pe-3">
+                                        <span class="badge bg-success-subtle text-success">
+                                            <i class="bi bi-check-circle-fill me-1"></i> Mastered
+                                        </span>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        {% endif %}
+
+            </main>
+        </div>
+    </div>
+
+    <!-- Bootstrap 5 JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Collapsible Sidebar Controller -->
+    <script src="{{ url_for('static', filename='js/sidebar.js') }}"></script>
+</body>
+</html>

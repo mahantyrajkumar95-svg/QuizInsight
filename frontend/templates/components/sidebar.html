@@ -1,0 +1,70 @@
+<!-- QuizInsight Collapsible Sidebar Navigation -->
+<aside class="dashboard-sidebar" id="dashboardSidebar">
+    <!-- Sidebar Brand & Logo -->
+    <div class="sidebar-header">
+        <a class="sidebar-brand" href="{{ url_for('dashboard') }}" title="QuizInsight">
+            <i class="bi bi-mortarboard-fill text-primary"></i>
+            <span class="brand-text">QuizInsight</span>
+        </a>
+        <button class="btn btn-sm btn-light border-0 d-lg-none" id="sidebarMobileClose" type="button" aria-label="Close sidebar">
+            <i class="bi bi-x-lg text-secondary"></i>
+        </button>
+    </div>
+
+    <!-- Navigation Items -->
+    <div class="sidebar-body">
+        <ul class="sidebar-nav">
+            <li class="sidebar-item">
+                <a class="sidebar-link {% if active_page == 'home' %}active{% endif %}" href="{{ url_for('home') }}" data-bs-toggle="tooltip" data-bs-placement="right" title="Home">
+                    <i class="bi bi-house"></i>
+                    <span class="sidebar-link-text">Home</span>
+                </a>
+            </li>
+            <li class="sidebar-item">
+                <a class="sidebar-link {% if active_page == 'dashboard' %}active{% endif %}" href="{{ url_for('dashboard') }}" data-bs-toggle="tooltip" data-bs-placement="right" title="Dashboard">
+                    <i class="bi bi-speedometer2"></i>
+                    <span class="sidebar-link-text">Dashboard</span>
+                </a>
+            </li>
+            <li class="sidebar-item">
+                <a class="sidebar-link {% if active_page == 'quizzes' %}active{% endif %}" href="{{ url_for('available_quizzes') }}" data-bs-toggle="tooltip" data-bs-placement="right" title="Available Quizzes">
+                    <i class="bi bi-journal-check"></i>
+                    <span class="sidebar-link-text">Available Quizzes</span>
+                </a>
+            </li>
+            <li class="sidebar-item">
+                <a class="sidebar-link {% if active_page == 'ai_quiz' %}active{% endif %}" href="{{ url_for('generate_ai_quiz') }}" data-bs-toggle="tooltip" data-bs-placement="right" title="AI Quiz Generator">
+                    <i class="bi bi-cpu"></i>
+                    <span class="sidebar-link-text">AI Quiz Generator</span>
+                </a>
+            </li>
+            <li class="sidebar-item">
+                <a class="sidebar-link {% if active_page == 'history' %}active{% endif %}" href="{{ url_for('quiz_history') }}" data-bs-toggle="tooltip" data-bs-placement="right" title="Quiz History">
+                    <i class="bi bi-clock-history"></i>
+                    <span class="sidebar-link-text">Quiz History</span>
+                </a>
+            </li>
+            <li class="sidebar-item">
+                <a class="sidebar-link {% if active_page == 'analytics' %}active{% endif %}" href="{{ url_for('analytics_view') }}" data-bs-toggle="tooltip" data-bs-placement="right" title="Performance Analytics">
+                    <i class="bi bi-graph-up"></i>
+                    <span class="sidebar-link-text">Performance Analytics</span>
+                </a>
+            </li>
+            <li class="sidebar-item">
+                <a class="sidebar-link {% if active_page == 'recommendations' %}active{% endif %}" href="{{ url_for('recommendations_view') }}" data-bs-toggle="tooltip" data-bs-placement="right" title="Practice Recommendations">
+                    <i class="bi bi-lightbulb"></i>
+                    <span class="sidebar-link-text">Practice Recommendations</span>
+                </a>
+            </li>
+            <li class="sidebar-item">
+                <a class="sidebar-link {% if active_page == 'retention' %}active{% endif %}" href="{{ url_for('retention_view') }}" data-bs-toggle="tooltip" data-bs-placement="right" title="Knowledge Retention">
+                    <i class="bi bi-arrow-repeat"></i>
+                    <span class="sidebar-link-text">Knowledge Retention</span>
+                </a>
+            </li>
+        </ul>
+    </div>
+</aside>
+
+<!-- Mobile Overlay Backdrop -->
+<div class="sidebar-backdrop" id="sidebarBackdrop"></div>

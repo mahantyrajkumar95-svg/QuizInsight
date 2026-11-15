@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Quiz Result: {{ topic }} | QuizInsight</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <!-- Custom Style -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .result-score-card {
+            background: linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4338ca 100%);
+            color: #ffffff;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 10px 30px rgba(67, 56, 202, 0.2);
+        }
+        .score-circle {
+            width: 140px;
+            height: 140px;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border: 6px solid #818cf8;
+            margin: 0 auto;
+        }
+        .review-card {
+            background: #ffffff;
+            border-radius: 14px;
+            border: 1px solid var(--border-color);
+            padding: 24px;
+            margin-bottom: 20px;
+        }
+        .review-card.correct {
+            border-left: 6px solid #10b981;
+        }
+        .review-card.incorrect {
+            border-left: 6px solid #ef4444;
+        }
+        .option-review-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body class="bg-light">
+
+    <div class="dashboard-wrapper">
+        <!-- Collapsible Left Sidebar -->
+        {% set active_page = 'ai_quiz' %}
+        {% include 'components/sidebar.html' %}
+
+        <!-- Main Area (Topbar + Content) -->
+        <div class="dashboard-main" id="dashboardMain">
+            {% set page_title = 'AI Quiz Result' %}
+            {% include 'components/topbar.html' %}
+
+            <!-- Main Content Container -->
+            <main class="dashboard-content">
+
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, msg in messages %}
+                    <div class="alert alert-{{ category if category != 'error' else 'danger' }} alert-dismissible fade show mb-4" role="alert">
+                        {{ msg }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <!-- Scoreboard Header Card -->
+        <div class="result-score-card mb-5 text-center">
+            <div class="d-flex justify-content-center gap-2 mb-3">
+                <span class="badge bg-white text-dark px-3 py-2 fw-semibold">
+                    <i class="bi bi-robot me-1"></i> AI-Generated Quiz
+                </span>
+                <span class="badge bg-info text-dark px-3 py-2 fw-semibold">{{ difficulty }}</span>
+            </div>
+            <h2 class="fw-bold text-white mb-2">{{ topic }}</h2>
+            <p class="text-white-50 mb-4 small">
+                Attempted by <strong>{{ session.get('student_name', 'Student') }}</strong> on 
+                {{ submitted_at.strftime('%d %b %Y, %I:%M %p') if submitted_at else 'Recent' }}
+            </p>
+
+            <div class="row align-items-center justify-content-center gy-4 mb-4">
+                <div class="col-md-4">
+                    <div class="score-circle">
+                        <h1 class="fw-bold mb-0 text-white">{{ score }}%</h1>
+                        <small class="text-white-50">Final Score</small>
+                    </div>
+                </div>
+                <div class="col-md-8">
+                    <div class="row g-3 text-start">
+                        <div class="col-6">
+                            <div class="p-3 bg-white bg-opacity-10 rounded-3">
+                                <span class="text-white-50 small d-block">Correct Answers</span>
+                                <h4 class="fw-bold text-success mb-0">
+                                    <i class="bi bi-check-circle-fill me-1"></i>{{ correct_answers }} / {{ total_questions }}
+                                </h4>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="p-3 bg-white bg-opacity-10 rounded-3">
+                                <span class="text-white-50 small d-block">Incorrect Answers</span>
+                                <h4 class="fw-bold text-danger mb-0">
+                                    <i class="bi bi-x-circle-fill me-1"></i>{{ incorrect_answers }} / {{ total_questions }}
+                                </h4>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="p-3 bg-white bg-opacity-10 rounded-3">
+                                <span class="text-white-50 small d-block">Accuracy Rate</span>
+                                <h4 class="fw-bold text-info mb-0">{{ accuracy }}%</h4>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="p-3 bg-white bg-opacity-10 rounded-3">
+                                <span class="text-white-50 small d-block">Time Elapsed</span>
+                                <h4 class="fw-bold text-warning mb-0">
+                                    <i class="bi bi-stopwatch me-1"></i>
+                                    {% if time_taken_seconds >= 60 %}
+                                        {{ (time_taken_seconds // 60) }}m {{ (time_taken_seconds % 60) }}s
+                                    {% else %}
+                                        {{ time_taken_seconds }}s
+                                    {% endif %}
+                                </h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="d-flex flex-wrap justify-content-center gap-3 pt-3 border-top border-white border-opacity-25">
+                <a href="{{ url_for('generate_ai_quiz') }}" class="btn btn-light fw-bold text-dark px-3">
+                    <i class="bi bi-stars me-1"></i> Generate Another AI Quiz
+                </a>
+                <a href="{{ url_for('available_quizzes') }}" class="btn btn-outline-light px-3">
+                    <i class="bi bi-journal-check me-1"></i> Browse Existing Quizzes
+                </a>
+                <a href="{{ url_for('quiz_history') }}" class="btn btn-outline-light px-3">
+                    <i class="bi bi-clock-history me-1"></i> View Quiz History
+                </a>
+                <a href="{{ url_for('dashboard') }}" class="btn btn-outline-light px-3">
+                    <i class="bi bi-speedometer2 me-1"></i> Return to Dashboard
+                </a>
+            </div>
+        </div>
+
+        <!-- Detailed Question-by-Question Review -->
+        <div class="d-flex align-items-center justify-content-between mb-4">
+            <h4 class="fw-bold text-dark mb-0">
+                <i class="bi bi-journal-text text-primary me-2"></i>Question Review & Explanations
+            </h4>
+            <span class="text-muted small">Diagnostic feedback and rationales</span>
+        </div>
+
+        {% for q in questions_review %}
+            <div class="review-card {{ 'correct' if q.is_correct else 'incorrect' }}">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <span class="badge {{ 'bg-success' if q.is_correct else 'bg-danger' }} rounded-pill px-3 py-1">
+                        Question {{ loop.index }} &bull; {{ 'CORRECT' if q.is_correct else 'INCORRECT' }}
+                    </span>
+                    <span class="small text-muted">AI Generated Item #{{ loop.index }}</span>
+                </div>
+
+                <h5 class="fw-semibold text-dark mb-3 lh-base">{{ q.question_text }}</h5>
+
+                <!-- Options Grid -->
+                <div class="row g-2 mb-3">
+                    <div class="col-md-6">
+                        <div class="p-2 px-3 rounded-2 border small {% if q.correct_option == 'A' %}bg-success-subtle border-success text-success fw-bold{% elif q.selected_option == 'A' and not q.is_correct %}bg-danger-subtle border-danger text-danger{% else %}bg-light text-muted{% endif %}">
+                            <strong>A.</strong> {{ q.option_a }}
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="p-2 px-3 rounded-2 border small {% if q.correct_option == 'B' %}bg-success-subtle border-success text-success fw-bold{% elif q.selected_option == 'B' and not q.is_correct %}bg-danger-subtle border-danger text-danger{% else %}bg-light text-muted{% endif %}">
+                            <strong>B.</strong> {{ q.option_b }}
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="p-2 px-3 rounded-2 border small {% if q.correct_option == 'C' %}bg-success-subtle border-success text-success fw-bold{% elif q.selected_option == 'C' and not q.is_correct %}bg-danger-subtle border-danger text-danger{% else %}bg-light text-muted{% endif %}">
+                            <strong>C.</strong> {{ q.option_c }}
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="p-2 px-3 rounded-2 border small {% if q.correct_option == 'D' %}bg-success-subtle border-success text-success fw-bold{% elif q.selected_option == 'D' and not q.is_correct %}bg-danger-subtle border-danger text-danger{% else %}bg-light text-muted{% endif %}">
+                            <strong>D.</strong> {{ q.option_d }}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Answer Badges -->
+                <div class="d-flex flex-wrap gap-2 mb-3">
+                    <div class="option-review-badge {% if q.is_correct %}bg-success-subtle text-success{% else %}bg-danger-subtle text-danger{% endif %}">
+                        <i class="bi {{ 'bi-check-circle-fill' if q.is_correct else 'bi-x-circle-fill' }}"></i>
+                        Your Selected Answer: Option {{ q.selected_option }}
+                    </div>
+
+                    {% if not q.is_correct %}
+                        <div class="option-review-badge bg-success-subtle text-success">
+                            <i class="bi bi-award-fill"></i>
+                            Verified Correct Answer: Option {{ q.correct_option }}
+                        </div>
+                    {% endif %}
+                </div>
+
+                <!-- Explanation Box -->
+                <div class="p-3 bg-light rounded-3 border">
+                    <div class="fw-semibold text-dark small mb-1">
+                        <i class="bi bi-lightbulb-fill text-warning me-1"></i> Explanation & Learning Rationale:
+                    </div>
+                    <p class="text-secondary small mb-0">{{ q.explanation }}</p>
+                </div>
+            </div>
+        {% endfor %}
+
+        <!-- Bottom Navigation Card -->
+        <div class="card border-0 shadow-sm rounded-4 p-4 text-center bg-white mt-4">
+            <h5 class="fw-bold text-dark mb-3">Next Learning Steps</h5>
+            <div class="d-flex flex-wrap justify-content-center gap-3">
+                <a href="{{ url_for('generate_ai_quiz') }}" class="btn btn-primary px-4 fw-semibold">
+                    <i class="bi bi-stars me-1"></i> Generate Another AI Quiz
+                </a>
+                <a href="{{ url_for('available_quizzes') }}" class="btn btn-outline-secondary px-4">
+                    <i class="bi bi-journal-check me-1"></i> Browse Existing Quizzes
+                </a>
+                <a href="{{ url_for('quiz_history') }}" class="btn btn-outline-secondary px-4">
+                    <i class="bi bi-clock-history me-1"></i> View Quiz History
+                </a>
+                <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary px-4">
+                    <i class="bi bi-speedometer2 me-1"></i> Return to Dashboard
+                </a>
+            </div>
+        </div>
+
+            </main>
+        </div>
+    </div>
+
+    <!-- Bootstrap 5 JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Collapsible Sidebar Controller -->
+    <script src="{{ url_for('static', filename='js/sidebar.js') }}"></script>
+</body>
+</html>

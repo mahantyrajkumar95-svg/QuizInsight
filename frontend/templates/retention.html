@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Knowledge Retention System | QuizInsight</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <!-- Custom Style -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .retention-card {
+            background: #ffffff;
+            border-radius: 16px;
+            padding: 24px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.04);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .retention-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.07);
+        }
+        .summary-metric {
+            background: #ffffff;
+            border-radius: 14px;
+            padding: 20px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+        }
+        .due-card {
+            border-left: 5px solid #ef4444;
+        }
+        .upcoming-card {
+            border-left: 5px solid #3b82f6;
+        }
+    </style>
+</head>
+<body class="bg-light">
+
+    <div class="dashboard-wrapper">
+        <!-- Collapsible Left Sidebar -->
+        {% set active_page = 'retention' %}
+        {% include 'components/sidebar.html' %}
+
+        <!-- Main Area (Topbar + Content) -->
+        <div class="dashboard-main" id="dashboardMain">
+            {% set page_title = 'Knowledge Retention' %}
+            {% include 'components/topbar.html' %}
+
+            <!-- Main Content Container -->
+            <main class="dashboard-content">
+
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show rounded-3 shadow-sm mb-4" role="alert">
+                        <i class="bi bi-info-circle-fill me-2"></i>{{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <!-- Header -->
+        <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+            <div>
+                <h2 class="fw-bold text-dark mb-1">
+                    <i class="bi bi-arrow-repeat text-primary me-2"></i>Knowledge Retention System
+                </h2>
+                <p class="text-muted small mb-0">
+                    Spaced repetition testing: track 7-day retention intervals, combat the forgetting curve, and verify long-term memory mastery
+                </p>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-grid me-1"></i> Dashboard
+                </a>
+                <a href="{{ url_for('available_quizzes') }}" class="btn btn-primary btn-sm">
+                    <i class="bi bi-play-circle me-1"></i> Explore Quizzes
+                </a>
+            </div>
+        </div>
+
+        <!-- 4 Summary KPI Cards -->
+        <div class="row g-3 mb-4">
+            <!-- Due Now -->
+            <div class="col-sm-6 col-xl-3">
+                <div class="summary-metric border-danger-subtle bg-danger-subtle">
+                    <span class="text-danger small fw-semibold d-block">Due For Retest</span>
+                    <h3 class="fw-bold text-danger mb-0 mt-1">{{ retention.due_now_count }}</h3>
+                    <small class="text-danger-emphasis">Ready for memory check</small>
+                </div>
+            </div>
+
+            <!-- Upcoming Scheduled -->
+            <div class="col-sm-6 col-xl-3">
+                <div class="summary-metric border-primary-subtle bg-primary-subtle">
+                    <span class="text-primary small fw-semibold d-block">Upcoming Schedules</span>
+                    <h3 class="fw-bold text-primary mb-0 mt-1">{{ retention.upcoming_count }}</h3>
+                    <small class="text-primary-emphasis">In 7-day retention pipeline</small>
+                </div>
+            </div>
+
+            <!-- Completed Retests -->
+            <div class="col-sm-6 col-xl-3">
+                <div class="summary-metric border-success-subtle bg-success-subtle">
+                    <span class="text-success small fw-semibold d-block">Completed Retests</span>
+                    <h3 class="fw-bold text-success mb-0 mt-1">{{ retention.completed_count }}</h3>
+                    <small class="text-success-emphasis">Follow-ups evaluated</small>
+                </div>
+            </div>
+
+            <!-- Average Retention Delta -->
+            <div class="col-sm-6 col-xl-3">
+                <div class="summary-metric">
+                    <span class="text-muted small fw-semibold d-block">Average Retention Delta</span>
+                    <h3 class="fw-bold text-{{ 'success' if retention.avg_delta > 0 else ('primary' if retention.avg_delta == 0 else 'danger') }} mb-0 mt-1">
+                        {{ retention.avg_delta_formatted }}
+                    </h3>
+                    <small class="text-muted">
+                        {% if retention.retention_rate is not none %}
+                            {{ retention.retention_rate }}% retention rate
+                        {% else %}
+                            Baseline pending
+                        {% endif %}
+                    </small>
+                </div>
+            </div>
+        </div>
+
+        <!-- SECTION 1: Due Now Follow-up Quizzes -->
+        {% if retention.due_now %}
+            <div class="mb-4">
+                <div class="alert alert-danger border-danger-subtle d-flex flex-wrap align-items-center justify-content-between p-3 rounded-3 mb-3 gap-2">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-alarm-fill text-danger fs-3"></i>
+                        <div>
+                            <span class="fw-bold text-dark d-block">Retention Quizzes Due Now!</span>
+                            <span class="small text-muted">
+                                You have <strong>{{ retention.due_now_count }}</strong> scheduled quiz(zes) that have reached their spaced retention interval. Take them now to test long-term retention!
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-4">
+                    {% for item in retention.due_now %}
+                        <div class="col-md-6 col-lg-4">
+                            <div class="retention-card due-card h-100 d-flex flex-column justify-content-between">
+                                <div>
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="badge bg-danger text-white">Due for Retest</span>
+                                        <small class="text-muted">{{ item.scheduled_for.strftime('%d %b %Y') if item.scheduled_for else 'Today' }}</small>
+                                    </div>
+                                    <h5 class="fw-bold text-dark mb-1">{{ item.quiz_title }}</h5>
+                                    <p class="small text-muted mb-2">
+                                        <span class="badge bg-light text-dark border me-1">{{ item.subject_name }}</span>
+                                        {{ item.topic_name }}
+                                    </p>
+                                    <div class="p-2 bg-light rounded-2 border mb-3 small">
+                                        <span class="text-muted d-block">Initial Attempt Score:</span>
+                                        <strong class="text-primary fs-6">{{ item.initial_score }}%</strong>
+                                        <span class="text-muted"> ({{ item.initial_submitted_at.strftime('%d %b %Y') if item.initial_submitted_at else 'Prior' }})</span>
+                                    </div>
+                                </div>
+                                <a href="{{ url_for('take_retention_quiz', schedule_id=item.schedule_id) }}" class="btn btn-danger btn-sm w-100 fw-semibold">
+                                    <i class="bi bi-play-circle-fill me-1"></i> Take Follow-up Quiz Now
+                                </a>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        {% endif %}
+
+        <!-- SECTION 2: Upcoming Retention Retest Schedule -->
+        {% if retention.upcoming %}
+            <div class="card border-0 shadow-sm rounded-4 mb-4">
+                <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+                    <h5 class="fw-bold mb-0 text-dark">
+                        <i class="bi bi-calendar-check text-primary me-2"></i>Upcoming Retention Retests (7-Day Spaced Repetition)
+                    </h5>
+                    <span class="badge bg-primary-subtle text-primary">{{ retention.upcoming_count }} Scheduled</span>
+                </div>
+                <div class="card-body p-4">
+                    <p class="text-muted small mb-3">
+                        These quizzes were automatically scheduled 7 days after your initial attempt to verify durable conceptual recall. You can wait for the scheduled date or initiate an early retest below.
+                    </p>
+                    <div class="row g-3">
+                        {% for item in retention.upcoming %}
+                            <div class="col-md-6 col-lg-4">
+                                <div class="retention-card upcoming-card h-100 d-flex flex-column justify-content-between">
+                                    <div>
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+                                                <i class="bi bi-hourglass-split me-1"></i>{{ item.due_label }}
+                                            </span>
+                                            <small class="text-muted">{{ item.scheduled_for.strftime('%d %b %Y') if item.scheduled_for else 'Upcoming' }}</small>
+                                        </div>
+                                        <h6 class="fw-bold text-dark mb-1">{{ item.quiz_title }}</h6>
+                                        <p class="small text-muted mb-2">
+                                            <span class="badge bg-light text-dark border me-1">{{ item.subject_name }}</span>
+                                            {{ item.topic_name }}
+                                        </p>
+                                        <div class="p-2 bg-light rounded-2 border mb-3 small">
+                                            <span class="text-muted d-block">Initial Attempt Score:</span>
+                                            <strong class="text-dark">{{ item.initial_score }}%</strong>
+                                            <span class="text-muted"> on {{ item.initial_submitted_at.strftime('%d %b %Y') if item.initial_submitted_at else 'Recent' }}</span>
+                                        </div>
+                                    </div>
+                                    <a href="{{ url_for('take_retention_quiz', schedule_id=item.schedule_id) }}" class="btn btn-outline-primary btn-sm w-100">
+                                        <i class="bi bi-arrow-repeat me-1"></i> Take Early Retest
+                                    </a>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+
+        <!-- SECTION 3: Knowledge Retention Comparison Table -->
+        <div class="card border-0 shadow-sm rounded-4 mb-4">
+            <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+                <h5 class="fw-bold mb-0 text-dark">
+                    <i class="bi bi-graph-up text-success me-2"></i>Initial vs. Follow-up Quiz Performance Comparison
+                </h5>
+                <span class="badge bg-light text-secondary border">Memory Retention Tracking</span>
+            </div>
+            <div class="card-body p-0">
+                {% if retention.completed %}
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr class="small text-muted">
+                                    <th class="ps-4">Quiz Title & Topic</th>
+                                    <th>Initial Score</th>
+                                    <th>Follow-up Score</th>
+                                    <th>Score Difference (Delta)</th>
+                                    <th>Retention Interval</th>
+                                    <th>Retention Classification</th>
+                                    <th class="text-end pe-4">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for c in retention.completed %}
+                                    <tr>
+                                        <td class="ps-4">
+                                            <span class="fw-bold text-dark d-block">{{ c.quiz_title }}</span>
+                                            <small class="text-muted">{{ c.subject_name }} &bull; {{ c.topic_name }}</small>
+                                        </td>
+                                        <td>
+                                            <span class="fw-bold text-secondary">{{ c.initial_score }}%</span>
+                                            <small class="text-muted d-block">{{ c.initial_submitted_at.strftime('%d %b %Y') if c.initial_submitted_at else 'Prior' }}</small>
+                                        </td>
+                                        <td>
+                                            <span class="fw-bold text-primary">{{ c.followup_score }}%</span>
+                                            <small class="text-muted d-block">{{ c.followup_submitted_at.strftime('%d %b %Y') if c.followup_submitted_at else 'Recent' }}</small>
+                                        </td>
+                                        <td>
+                                            <span class="fw-bold fs-6 text-{{ 'success' if c.delta > 0 else ('primary' if c.delta == 0 else 'danger') }}">
+                                                {{ c.delta_formatted }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-light text-dark border">
+                                                <i class="bi bi-clock-history me-1"></i>{{ c.interval_formatted }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-{{ c.badge_class }} px-2 py-1">
+                                                <i class="bi {{ c.icon }} me-1"></i>{{ c.retention_status }}
+                                            </span>
+                                        </td>
+                                        <td class="text-end pe-4">
+                                            <a href="{{ url_for('view_quiz_result', attempt_id=c.followup_attempt_id) }}" class="btn btn-sm btn-outline-secondary">
+                                                View Result
+                                            </a>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-5 text-muted">
+                        <i class="bi bi-hourglass-bottom fs-1 text-primary d-block mb-3"></i>
+                        <h5 class="fw-bold text-dark">No Completed Follow-up Retests Yet</h5>
+                        <p class="small text-muted max-w-sm mx-auto mb-3">
+                            When you complete a scheduled retention quiz, QuizInsight will automatically calculate your initial vs. follow-up score difference, measure memory decay, and classify your retention mastery.
+                        </p>
+                        {% if retention.upcoming %}
+                            <p class="small text-secondary mb-0">
+                                You have <strong>{{ retention.upcoming_count }}</strong> upcoming scheduled retests above. Try an early retest to generate your first retention comparison!
+                            </p>
+                        {% endif %}
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+            </main>
+        </div>
+    </div>
+
+    <!-- Bootstrap 5 JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Collapsible Sidebar Controller -->
+    <script src="{{ url_for('static', filename='js/sidebar.js') }}"></script>
+</body>
+</html>

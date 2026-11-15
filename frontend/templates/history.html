@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiz History | QuizInsight</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <!-- Custom Style -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .summary-card {
+            background: #ffffff;
+            border-radius: 14px;
+            padding: 20px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+        }
+        .history-table tbody tr {
+            transition: background 0.15s ease;
+        }
+        .history-table tbody tr:hover {
+            background-color: #f8fafc;
+        }
+        .nav-pills .nav-link {
+            border-radius: 10px;
+            font-weight: 600;
+            padding: 10px 22px;
+            color: #475569;
+            border: 1px solid transparent;
+        }
+        .nav-pills .nav-link.active {
+            background-color: var(--primary-color);
+            color: #ffffff;
+        }
+    </style>
+</head>
+<body class="bg-light">
+
+    <div class="dashboard-wrapper">
+        <!-- Collapsible Left Sidebar -->
+        {% set active_page = 'history' %}
+        {% include 'components/sidebar.html' %}
+
+        <!-- Main Area (Topbar + Content) -->
+        <div class="dashboard-main" id="dashboardMain">
+            {% set page_title = 'Quiz History' %}
+            {% include 'components/topbar.html' %}
+
+            <!-- Main Content Container -->
+            <main class="dashboard-content">
+
+        <!-- Breadcrumb Header -->
+        <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+            <div>
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb mb-1 small">
+                        <li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}" class="text-decoration-none">Dashboard</a></li>
+                        <li class="breadcrumb-item active" aria-current="page">Quiz History</li>
+                    </ol>
+                </nav>
+                <h3 class="fw-bold text-dark mb-0">Quiz Attempts History</h3>
+                <p class="text-muted small mb-0">Review all your completed curriculum quizzes and on-demand AI quiz attempts.</p>
+            </div>
+            <div class="mt-3 mt-md-0 d-flex gap-2">
+                <a href="{{ url_for('available_quizzes') }}" class="btn btn-primary btn-sm">
+                    <i class="bi bi-journal-check me-1"></i> Existing Quizzes
+                </a>
+                <a href="{{ url_for('generate_ai_quiz') }}" class="btn btn-outline-primary btn-sm">
+                    <i class="bi bi-stars me-1"></i> Generate AI Quiz
+                </a>
+            </div>
+        </div>
+
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, msg in messages %}
+                    <div class="alert alert-{{ category if category != 'error' else 'danger' }} alert-dismissible fade show" role="alert">
+                        {{ msg }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <!-- Top Summary Cards -->
+        <div class="row g-3 mb-4">
+            <div class="col-sm-6 col-xl-3">
+                <div class="summary-card">
+                    <span class="text-muted small fw-semibold">Total Completed</span>
+                    <h3 class="fw-bold text-dark mb-0 mt-1">{{ total_attempts_count }}</h3>
+                    <small class="text-muted">{{ attempts|length }} Existing + {{ ai_attempts|length }} AI</small>
+                </div>
+            </div>
+            <div class="col-sm-6 col-xl-3">
+                <div class="summary-card">
+                    <span class="text-muted small fw-semibold">Average Score</span>
+                    <h3 class="fw-bold text-primary mb-0 mt-1">{{ avg_score }}%</h3>
+                    <small class="text-muted">Combined performance</small>
+                </div>
+            </div>
+            <div class="col-sm-6 col-xl-3">
+                <div class="summary-card">
+                    <span class="text-muted small fw-semibold">Personal Best</span>
+                    <h3 class="fw-bold text-success mb-0 mt-1">
+                        {% if best_score is not none %}{{ best_score }}%{% else %}N/A{% endif %}
+                    </h3>
+                    <small class="text-muted">Highest score attained</small>
+                </div>
+            </div>
+            <div class="col-sm-6 col-xl-3">
+                <div class="summary-card">
+                    <span class="text-muted small fw-semibold">Total Practice Time</span>
+                    <h3 class="fw-bold text-dark mb-0 mt-1">
+                        {% if total_time_seconds >= 60 %}
+                            {{ (total_time_seconds // 60) }}m {{ (total_time_seconds % 60) }}s
+                        {% else %}
+                            {{ total_time_seconds }}s
+                        {% endif %}
+                    </h3>
+                    <small class="text-muted">Active quiz engagement</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Nav Tabs for Existing vs AI Quizzes -->
+        <ul class="nav nav-pills mb-4 bg-white p-2 rounded-4 shadow-sm d-inline-flex" id="historyTab" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="existing-tab" data-bs-toggle="pill" data-bs-target="#existing-quizzes" type="button" role="tab">
+                    <i class="bi bi-journal-text me-1"></i> Existing Quizzes ({{ attempts|length }})
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="ai-tab" data-bs-toggle="pill" data-bs-target="#ai-quizzes" type="button" role="tab">
+                    <i class="bi bi-robot me-1"></i> AI-Generated Quizzes ({{ ai_attempts|length }})
+                </button>
+            </li>
+        </ul>
+
+        <!-- Tab Content -->
+        <div class="tab-content" id="historyTabContent">
+
+            <!-- TAB 1: Existing Quizzes -->
+            <div class="tab-pane fade show active" id="existing-quizzes" role="tabpanel">
+                <div class="card border-0 shadow-sm rounded-4">
+                    <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+                        <h5 class="fw-bold mb-0 text-dark">
+                            <i class="bi bi-card-checklist text-primary me-2"></i>Curriculum Quiz Records
+                        </h5>
+                        <span class="badge bg-secondary-subtle text-secondary">{{ attempts|length }} Completed</span>
+                    </div>
+                    <div class="card-body p-0">
+                        {% if attempts %}
+                            <div class="table-responsive">
+                                <table class="table history-table align-middle mb-0">
+                                    <thead class="table-light">
+                                        <tr class="small text-muted">
+                                            <th class="ps-4">Quiz Title</th>
+                                            <th>Subject</th>
+                                            <th>Topic</th>
+                                            <th>Score</th>
+                                            <th>Accuracy</th>
+                                            <th>Time Taken</th>
+                                            <th>Attempt Date</th>
+                                            <th class="text-end pe-4">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for a in attempts %}
+                                            <tr>
+                                                <td class="ps-4">
+                                                    <div class="fw-semibold text-dark">{{ a[1] }}</div>
+                                                    <small class="text-muted">Attempt #{{ a[0] }}</small>
+                                                </td>
+                                                <td>
+                                                    <span class="badge bg-primary-subtle text-primary">{{ a[2] }}</span>
+                                                </td>
+                                                <td>
+                                                    <span class="fw-medium text-dark small">{{ a[3] }}</span>
+                                                </td>
+                                                <td>
+                                                    <span class="fw-bold text-{{ 'success' if a[5] >= 70 else ('warning text-dark' if a[5] >= 50 else 'danger') }}">
+                                                        {{ a[5] }}%
+                                                    </span>
+                                                    <small class="text-muted d-block">({{ a[8] }}/{{ a[7] }})</small>
+                                                </td>
+                                                <td>
+                                                    <span class="fw-semibold text-dark small">{{ a[6] }}%</span>
+                                                </td>
+                                                <td>
+                                                    <span class="badge bg-light text-dark border">
+                                                        <i class="bi bi-stopwatch text-warning me-1"></i>
+                                                        {% if a[9] >= 60 %}
+                                                            {{ (a[9] // 60) }}m {{ (a[9] % 60) }}s
+                                                        {% else %}
+                                                            {{ a[9] }}s
+                                                        {% endif %}
+                                                    </span>
+                                                </td>
+                                                <td class="small text-muted">
+                                                    {{ a[10].strftime('%d %b %Y, %I:%M %p') if a[10] else 'N/A' }}
+                                                </td>
+                                                <td class="text-end pe-4">
+                                                    <a href="{{ url_for('view_quiz_result', attempt_id=a[0]) }}" class="btn btn-sm btn-outline-primary">
+                                                        <i class="bi bi-eye me-1"></i> View Result
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <div class="text-center py-5 text-muted">
+                                <i class="bi bi-inbox fs-1 d-block mb-3 text-secondary"></i>
+                                <h5 class="fw-bold text-dark">No Existing Quiz Attempts Yet</h5>
+                                <p class="small text-muted mb-3">Explore our curated subject curriculum to attempt pre-built quizzes.</p>
+                                <a href="{{ url_for('available_quizzes') }}" class="btn btn-primary btn-sm">
+                                    <i class="bi bi-play-circle me-1"></i> Select an Existing Quiz
+                                </a>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: AI-Generated Quizzes -->
+            <div class="tab-pane fade" id="ai-quizzes" role="tabpanel">
+                <div class="card border-0 shadow-sm rounded-4">
+                    <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+                        <h5 class="fw-bold mb-0 text-dark">
+                            <i class="bi bi-cpu text-primary me-2"></i>AI-Generated Quiz Attempts
+                        </h5>
+                        <span class="badge bg-purple-subtle text-purple border" style="background: #f3e8ff; color: #7e22ce;">
+                            {{ ai_attempts|length }} Completed
+                        </span>
+                    </div>
+                    <div class="card-body p-0">
+                        {% if ai_attempts %}
+                            <div class="table-responsive">
+                                <table class="table history-table align-middle mb-0">
+                                    <thead class="table-light">
+                                        <tr class="small text-muted">
+                                            <th class="ps-4">Student-Entered Topic</th>
+                                            <th>Difficulty</th>
+                                            <th>Questions</th>
+                                            <th>Score</th>
+                                            <th>Accuracy</th>
+                                            <th>Time Taken</th>
+                                            <th>Attempt Date</th>
+                                            <th class="text-end pe-4">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for a in ai_attempts %}
+                                            <tr>
+                                                <td class="ps-4">
+                                                    <div class="fw-semibold text-dark">{{ a[2] }}</div>
+                                                    <small class="text-muted">AI Attempt #{{ a[0] }}</small>
+                                                </td>
+                                                <td>
+                                                    <span class="badge bg-{{ 'success' if a[3] == 'Easy' else ('warning text-dark' if a[3] == 'Medium' else 'danger') }}">
+                                                        {{ a[3] }}
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <span class="fw-medium text-dark small">{{ a[4] }} Items</span>
+                                                </td>
+                                                <td>
+                                                    <span class="fw-bold text-{{ 'success' if a[5] >= 70 else ('warning text-dark' if a[5] >= 50 else 'danger') }}">
+                                                        {{ a[5] }}%
+                                                    </span>
+                                                    <small class="text-muted d-block">({{ a[7] }}/{{ a[4] }})</small>
+                                                </td>
+                                                <td>
+                                                    <span class="fw-semibold text-dark small">{{ a[6] }}%</span>
+                                                </td>
+                                                <td>
+                                                    <span class="badge bg-light text-dark border">
+                                                        <i class="bi bi-stopwatch text-warning me-1"></i>
+                                                        {% if a[8] >= 60 %}
+                                                            {{ (a[8] // 60) }}m {{ (a[8] % 60) }}s
+                                                        {% else %}
+                                                            {{ a[8] }}s
+                                                        {% endif %}
+                                                    </span>
+                                                </td>
+                                                <td class="small text-muted">
+                                                    {{ a[9].strftime('%d %b %Y, %I:%M %p') if a[9] else 'N/A' }}
+                                                </td>
+                                                <td class="text-end pe-4">
+                                                    <a href="{{ url_for('view_ai_quiz_result', ai_attempt_id=a[0]) }}" class="btn btn-sm btn-outline-primary">
+                                                        <i class="bi bi-eye me-1"></i> View Result
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <div class="text-center py-5 text-muted">
+                                <i class="bi bi-robot fs-1 d-block mb-3 text-secondary"></i>
+                                <h5 class="fw-bold text-dark">No AI Quizzes Attempted Yet</h5>
+                                <p class="small text-muted mb-3">You can enter any educational topic and generate customized practice quizzes.</p>
+                                <a href="{{ url_for('generate_ai_quiz') }}" class="btn btn-primary btn-sm">
+                                    <i class="bi bi-stars me-1"></i> Generate Your First AI Quiz
+                                </a>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+            </main>
+        </div>
+    </div>
+
+    <!-- Bootstrap 5 JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Collapsible Sidebar Controller -->
+    <script src="{{ url_for('static', filename='js/sidebar.js') }}"></script>
+</body>
+</html>

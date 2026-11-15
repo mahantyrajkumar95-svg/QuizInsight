@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Quiz Generator | QuizInsight</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <!-- Custom Style -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .ai-banner {
+            background: linear-gradient(135deg, #4338ca 0%, #6366f1 50%, #8b5cf6 100%);
+            color: white;
+            border-radius: 16px;
+            padding: 35px;
+            box-shadow: 0 10px 25px rgba(99, 102, 241, 0.2);
+        }
+        .ai-card {
+            background: #ffffff;
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+            padding: 30px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.05);
+        }
+        .topic-pill {
+            cursor: pointer;
+            border: 1px solid #cbd5e1;
+            background: #f8fafc;
+            color: #334155;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: all 0.15s ease;
+            display: inline-block;
+            margin: 3px;
+        }
+        .topic-pill:hover {
+            background: #e0e7ff;
+            border-color: #6366f1;
+            color: #4338ca;
+            transform: translateY(-1px);
+        }
+    </style>
+</head>
+<body class="bg-light">
+
+    <div class="dashboard-wrapper">
+        <!-- Collapsible Left Sidebar -->
+        {% set active_page = 'ai_quiz' %}
+        {% include 'components/sidebar.html' %}
+
+        <!-- Main Area (Topbar + Content) -->
+        <div class="dashboard-main" id="dashboardMain">
+            {% set page_title = 'AI Quiz Generator' %}
+            {% include 'components/topbar.html' %}
+
+            <!-- Main Content Container -->
+            <main class="dashboard-content">
+
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, msg in messages %}
+                    <div class="alert alert-{{ category if category != 'error' else 'danger' }} alert-dismissible fade show" role="alert">
+                        <i class="bi bi-info-circle-fill me-2"></i> {{ msg }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <!-- Breadcrumb & Header Banner -->
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-3 small">
+                <li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}" class="text-decoration-none">Dashboard</a></li>
+                <li class="breadcrumb-item"><a href="{{ url_for('available_quizzes') }}" class="text-decoration-none">Quizzes</a></li>
+                <li class="breadcrumb-item active" aria-current="page">AI Quiz Generator</li>
+            </ol>
+        </nav>
+
+        <div class="ai-banner mb-4">
+            <div class="row align-items-center">
+                <div class="col-lg-8">
+                    <div class="d-flex align-items-center gap-3 mb-2">
+                        <div class="p-2 bg-white bg-opacity-25 rounded-3">
+                            <i class="bi bi-robot fs-2"></i>
+                        </div>
+                        <h2 class="fw-bold mb-0">AI Quiz Generator</h2>
+                    </div>
+                    <p class="mb-0 opacity-90 fs-6">
+                        Enter any educational topic you want to master. Our AI generates customized multiple-choice questions with 4 distinct options, verified answer keys, and clear explanations.
+                    </p>
+                </div>
+                <div class="col-lg-4 text-lg-end mt-3 mt-lg-0">
+                    <span class="badge bg-white text-primary px-3 py-2 fw-semibold fs-6 shadow-sm">
+                        <i class="bi bi-cpu me-1"></i> Any Topic On-Demand
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-4">
+            
+            <!-- Generation Form Column -->
+            <div class="col-lg-7">
+                <div class="ai-card">
+                    <h5 class="fw-bold text-dark mb-3">
+                        <i class="bi bi-sliders text-primary me-2"></i>Generate an AI Quiz
+                    </h5>
+                    
+                    <form method="POST" action="{{ url_for('generate_ai_quiz') }}" id="aiQuizForm">
+                        
+                        <!-- 1. Free-text Topic Input -->
+                        <div class="mb-3">
+                            <label for="topicInput" class="form-label fw-bold text-dark">
+                                <i class="bi bi-pencil-square text-primary me-1"></i> Enter Your Topic <span class="text-danger">*</span>
+                            </label>
+                            <input type="text"
+                                   class="form-control form-control-lg"
+                                   name="topic"
+                                   id="topicInput"
+                                   placeholder="e.g. Python Programming, Machine Learning, Data Structures..."
+                                   required
+                                   maxlength="150"
+                                   autofocus>
+                            <div class="form-text small mb-2">
+                                Enter any educational topic (e.g. Computer Networks, DBMS, Operating System, Statistics, etc.).
+                            </div>
+
+                            <!-- Quick Suggestion Pills -->
+                            <div class="mt-2">
+                                <small class="text-muted d-block mb-1 fw-semibold">Quick Topic Suggestions:</small>
+                                <span class="topic-pill" onclick="setTopic('Python Programming')">Python Programming</span>
+                                <span class="topic-pill" onclick="setTopic('Machine Learning')">Machine Learning</span>
+                                <span class="topic-pill" onclick="setTopic('Artificial Intelligence')">Artificial Intelligence</span>
+                                <span class="topic-pill" onclick="setTopic('Data Structures')">Data Structures</span>
+                                <span class="topic-pill" onclick="setTopic('Database Management System')">DBMS</span>
+                                <span class="topic-pill" onclick="setTopic('Operating System')">Operating System</span>
+                                <span class="topic-pill" onclick="setTopic('Computer Networks')">Computer Networks</span>
+                                <span class="topic-pill" onclick="setTopic('Statistics')">Statistics</span>
+                            </div>
+                        </div>
+
+                        <div class="row g-3 mb-4">
+                            <!-- 2. Difficulty Level -->
+                            <div class="col-md-6">
+                                <label for="difficultySelect" class="form-label fw-bold text-dark">
+                                    <i class="bi bi-bar-chart-steps text-primary me-1"></i> Difficulty Level
+                                </label>
+                                <select class="form-select form-select-lg" name="difficulty" id="difficultySelect" required>
+                                    <option value="Easy">Easy (Foundational)</option>
+                                    <option value="Medium" selected>Medium (Standard)</option>
+                                    <option value="Hard">Hard (Advanced)</option>
+                                </select>
+                            </div>
+
+                            <!-- 3. Number of Questions -->
+                            <div class="col-md-6">
+                                <label for="numQuestionsSelect" class="form-label fw-bold text-dark">
+                                    <i class="bi bi-123 text-primary me-1"></i> Number of Questions
+                                </label>
+                                <select class="form-select form-select-lg" name="num_questions" id="numQuestionsSelect" required>
+                                    <option value="3">3 Questions (Quick Drill)</option>
+                                    <option value="5" selected>5 Questions (Standard Practice)</option>
+                                    <option value="10">10 Questions (Comprehensive Test)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- 4. Generate Quiz Button -->
+                        <button type="submit" class="btn btn-primary btn-lg w-100 py-3 fw-bold shadow-sm" id="generateBtn">
+                            <i class="bi bi-stars me-1"></i> Generate Quiz
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Side Info & Student's AI Attempts Column -->
+            <div class="col-lg-5">
+                <div class="card border-0 shadow-sm rounded-4 p-4 mb-4 bg-white">
+                    <h6 class="fw-bold text-dark mb-3">
+                        <i class="bi bi-shield-check text-success me-2"></i>AI Quiz Standards
+                    </h6>
+                    <ul class="list-unstyled small text-muted d-flex flex-column gap-3 mb-0">
+                        <li class="d-flex align-items-start gap-2">
+                            <i class="bi bi-check2-circle text-success fs-5"></i>
+                            <span><strong>Any Topic Allowed</strong>: Type any academic concept without restriction.</span>
+                        </li>
+                        <li class="d-flex align-items-start gap-2">
+                            <i class="bi bi-check2-circle text-success fs-5"></i>
+                            <span><strong>Decoupled Storage</strong>: AI-generated quizzes are saved independently in separate attempt storage and never pollute the core curriculum question bank.</span>
+                        </li>
+                        <li class="d-flex align-items-start gap-2">
+                            <i class="bi bi-check2-circle text-success fs-5"></i>
+                            <span><strong>Full Explanations & Stopwatch</strong>: Every question includes 4 verified options, explanations, and an active stopwatch timer during testing.</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Recent AI Quiz Attempts -->
+                <div class="card border-0 shadow-sm rounded-4 p-4 bg-white">
+                    <h6 class="fw-bold text-dark mb-3">
+                        <i class="bi bi-clock-history text-primary me-2"></i>My Recent AI Quiz Attempts
+                    </h6>
+                    {% if recent_ai_attempts %}
+                        <div class="d-flex flex-column gap-2">
+                            {% for a in recent_ai_attempts %}
+                                <div class="p-3 bg-light rounded-3 border d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h6 class="fw-bold text-dark mb-0 small">{{ a[2] }}</h6>
+                                        <small class="text-muted">{{ a[3] }} &bull; {{ a[4] }} Qs &bull; Score: {{ a[5] }}%</small>
+                                    </div>
+                                    <a href="{{ url_for('view_ai_quiz_result', ai_attempt_id=a[0]) }}" class="btn btn-sm btn-outline-primary">
+                                        Review
+                                    </a>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="text-muted small mb-0">No AI quizzes attempted yet. Enter a topic to generate your first quiz!</p>
+                    {% endif %}
+                </div>
+            </div>
+
+        </div>
+
+            </main>
+        </div>
+    </div>
+
+    <!-- Bootstrap 5 JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Collapsible Sidebar Controller -->
+    <script src="{{ url_for('static', filename='js/sidebar.js') }}"></script>
+
+    <script>
+        function setTopic(name) {
+            const input = document.getElementById('topicInput');
+            input.value = name;
+            input.focus();
+        }
+
+        // Loading spinner indicator on submit
+        document.getElementById('aiQuizForm').addEventListener('submit', function() {
+            const btn = document.getElementById('generateBtn');
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span> Generating Questions with AI...';
+            btn.disabled = true;
+        });
+    </script>
+</body>
+</html>
