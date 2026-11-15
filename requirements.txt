@@ -6,3 +6,4 @@ matplotlib
 APScheduler
 python-dotenv
 requests
+gunicorn
