@@ -26,6 +26,41 @@ def get_or_generate_recommendations(student_id):
     cursor = conn.cursor()
 
     try:
+        # Check whether the currently logged-in student has attempted at least one quiz
+        cursor.execute(
+            """
+            SELECT 
+                (SELECT COUNT(*) FROM quiz_attempts WHERE student_id = %s AND submitted_at IS NOT NULL) +
+                (SELECT COUNT(*) FROM ai_quiz_attempts WHERE student_id = %s AND submitted_at IS NOT NULL)
+            """,
+            (student_id, student_id)
+        )
+        attempt_count = cursor.fetchone()[0]
+
+        # Case 1: Newly registered student with zero quiz attempts
+        if attempt_count == 0:
+            return {
+                "has_attempts": False,
+                "total_attempts": 0,
+                "total_recommendations": 0,
+                "high_priority_count": 0,
+                "medium_priority_count": 0,
+                "low_priority_count": 0,
+                "active_recommendations": [],
+                "completed_recommendations": [],
+                "empty_message": "No practice recommendations available yet. Attempt your first quiz to receive personalized practice recommendations based on your performance."
+            }
+
+        # Case 2: Student with Quiz Attempts
+        # Clean up any legacy starter/foundational records so only real performance recommendations remain
+        cursor.execute(
+            """
+            DELETE FROM practice_recommendations
+            WHERE student_id = %s AND reason LIKE 'Foundational Topic%%'
+            """,
+            (student_id,)
+        )
+
         # 1. Fetch current topic analysis
         weak_data = analyze_weak_topics(student_id)
 
@@ -107,52 +142,6 @@ def get_or_generate_recommendations(student_id):
                             """,
                             (student_id, topic_id, matching_quiz_id, reason, priority)
                         )
-        else:
-            # Cold start: Student has no quiz attempts yet.
-            # Recommend introductory foundational topics from available subjects.
-            cursor.execute(
-                """
-                SELECT t.topic_id, t.topic_name, s.subject_name
-                FROM topics t
-                JOIN subjects s ON t.subject_id = s.subject_id
-                ORDER BY t.topic_id ASC
-                LIMIT 3
-                """
-            )
-            starter_topics = cursor.fetchall()
-            for top_id, top_name, subj_name in starter_topics:
-                cursor.execute(
-                    """
-                    SELECT quiz_id FROM quizzes 
-                    WHERE topic_id = %s AND quiz_type = 'Existing'
-                    ORDER BY quiz_id ASC LIMIT 1
-                    """,
-                    (top_id,)
-                )
-                q_row = cursor.fetchone()
-                matching_quiz_id = q_row[0] if q_row else None
-
-                cursor.execute(
-                    """
-                    SELECT recommendation_id FROM practice_recommendations
-                    WHERE student_id = %s AND topic_id = %s AND status = 'Active'
-                    """,
-                    (student_id, top_id)
-                )
-                if not cursor.fetchone():
-                    cursor.execute(
-                        """
-                        INSERT INTO practice_recommendations
-                        (student_id, topic_id, quiz_id, reason, priority, status)
-                        VALUES (%s, %s, %s, %s, 'Medium', 'Active')
-                        """,
-                        (
-                            student_id,
-                            top_id,
-                            matching_quiz_id,
-                            f"Foundational Topic: Start your learning journey with {top_name} in {subj_name}."
-                        )
-                    )
 
         conn.commit()
 
@@ -215,12 +204,15 @@ def get_or_generate_recommendations(student_id):
         low_count = sum(1 for r in active_recs if r["priority"] == "Low")
 
         return {
+            "has_attempts": True,
+            "total_attempts": attempt_count,
             "total_recommendations": len(active_recs),
             "high_priority_count": high_count,
             "medium_priority_count": med_count,
             "low_priority_count": low_count,
             "active_recommendations": active_recs,
-            "completed_recommendations": completed_recs
+            "completed_recommendations": completed_recs,
+            "empty_message": ""
         }
     finally:
         cursor.close()

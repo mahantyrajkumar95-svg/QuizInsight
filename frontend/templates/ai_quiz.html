@@ -124,6 +124,7 @@
                                    name="topic"
                                    id="topicInput"
                                    placeholder="e.g. Python Programming, Machine Learning, Data Structures..."
+                                   value="{{ request.args.get('topic', '') }}"
                                    required
                                    maxlength="150"
                                    autofocus>
@@ -243,6 +244,15 @@
             input.value = name;
             input.focus();
         }
+
+        // Auto-fill topic from URL parameter if present
+        document.addEventListener('DOMContentLoaded', function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const topicParam = urlParams.get('topic');
+            if (topicParam) {
+                setTopic(topicParam);
+            }
+        });
 
         // Loading spinner indicator on submit
         document.getElementById('aiQuizForm').addEventListener('submit', function() {

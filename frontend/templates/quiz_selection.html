@@ -185,7 +185,7 @@
                                         <i class="bi bi-bookmark text-primary me-1"></i>Topic: <strong>{{ q[3] }}</strong>
                                     </p>
                                     <p class="small text-muted mb-3">
-                                        <i class="bi bi-question-circle me-1"></i><strong>{{ q[6] }}</strong> Questions in Quiz
+                                        <i class="bi bi-question-circle me-1"></i><strong>{{ 10 if q[6] >= 10 else q[6] }}</strong> Questions per Attempt
                                     </p>
                                 </div>
                                 <div class="pt-2 border-top">

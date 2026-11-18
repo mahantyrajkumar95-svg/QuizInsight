@@ -2,6 +2,7 @@ from datetime import datetime
 from functools import wraps
 import os
 import re
+import random
 
 from dotenv import load_dotenv
 from flask import (
@@ -26,6 +27,12 @@ from analytics.recommendations import (
     complete_recommendation
 )
 from analytics.retention import get_retention_analytics
+from modules.question_manager import (
+    normalize_question_text,
+    find_duplicate_question,
+    add_question,
+    validate_new_question
+)
 
 load_dotenv()
 
@@ -400,6 +407,69 @@ def get_topics_by_subject(subject_id):
             conn.close()
 
 
+# API endpoint to check whether a question already exists in the question bank
+@app.route("/api/questions/check-duplicate", methods=["POST"])
+@login_required
+def api_check_duplicate_question():
+    data = request.get_json() or {}
+    question_text = data.get("question_text", "").strip()
+    if not question_text:
+        return jsonify({"is_duplicate": False, "message": "Question text cannot be empty."}), 400
+
+    dup = find_duplicate_question(question_text)
+    if dup:
+        return jsonify({
+            "is_duplicate": True,
+            "existing_question": dup,
+            "message": f"Duplicate question detected: An equivalent question already exists in the question bank (Question ID: {dup['question_id']} under Topic: '{dup['topic_name']}')."
+        })
+    return jsonify({"is_duplicate": False, "message": "Question is unique."})
+
+
+# API endpoint to validate and add a new question to the question bank without storage limits
+@app.route("/api/questions/add", methods=["POST"])
+@login_required
+def api_add_question():
+    data = request.get_json() or {}
+    topic_id = data.get("topic_id")
+    question_text = data.get("question_text", "").strip()
+    option_a = data.get("option_a", "").strip()
+    option_b = data.get("option_b", "").strip()
+    option_c = data.get("option_c", "").strip()
+    option_d = data.get("option_d", "").strip()
+    correct_option = data.get("correct_option", "").strip().upper()
+    explanation = data.get("explanation", "").strip()
+    difficulty = data.get("difficulty", "Easy").strip()
+    quiz_id = data.get("quiz_id")
+
+    if not topic_id:
+        return jsonify({"success": False, "error": "topic_id is required."}), 400
+
+    try:
+        new_qid = add_question(
+            topic_id=int(topic_id),
+            question_text=question_text,
+            option_a=option_a,
+            option_b=option_b,
+            option_c=option_c,
+            option_d=option_d,
+            correct_option=correct_option,
+            explanation=explanation,
+            difficulty=difficulty,
+            quiz_id=int(quiz_id) if quiz_id else None
+        )
+        return jsonify({
+            "success": True,
+            "question_id": new_qid,
+            "message": "Question successfully added to question bank without duplication."
+        }), 201
+    except ValueError as val_err:
+        return jsonify({"success": False, "error": str(val_err)}), 400
+    except Exception as err:
+        print("Error adding question:", err)
+        return jsonify({"success": False, "error": f"Failed to add question: {str(err)}"}), 500
+
+
 # Subject, Topic, and Quiz Selection Route (Existing Curriculum Quizzes)
 @app.route("/quizzes")
 @app.route("/select-quiz")
@@ -558,7 +628,7 @@ def generate_ai_quiz():
             ai_attempt_id = cursor.fetchone()[0]
             conn.commit()
 
-            flash(f"Successfully generated {len(questions)} verified questions on '{topic}'", "success")
+            flash(f"Successfully generated {len(questions)} verified questions on '{topic}' via {source}!", "success")
             return redirect(url_for("start_ai_quiz", ai_attempt_id=ai_attempt_id))
 
         # GET Request: Render generation form and student's recent AI quiz attempts
@@ -1091,7 +1161,7 @@ def start_quiz(quiz_id):
             if active_attempt_id and active_quiz_id == quiz_id:
                 cursor.execute(
                     """
-                    SELECT attempt_id, started_at
+                    SELECT attempt_id, started_at, selected_question_ids
                     FROM quiz_attempts
                     WHERE attempt_id = %s AND student_id = %s AND quiz_id = %s AND submitted_at IS NULL
                     """,
@@ -1108,15 +1178,66 @@ def start_quiz(quiz_id):
                 attempt_id = existing_attempt[0]
                 started_at = existing_attempt[1]
                 elapsed_seconds = max(0, int((datetime.now() - started_at).total_seconds()))
+
+                # Retrieve the selected questions for this active attempt to maintain consistency
+                selected_q_ids = session.get(f"quiz_{attempt_id}_questions")
+                if not selected_q_ids and existing_attempt[2]:
+                    if isinstance(existing_attempt[2], list):
+                        selected_q_ids = existing_attempt[2]
+                    elif isinstance(existing_attempt[2], str):
+                        try:
+                            selected_q_ids = json.loads(existing_attempt[2])
+                        except Exception:
+                            selected_q_ids = None
+
+                # Fallback if attempt was created without questions recorded
+                if not selected_q_ids:
+                    cursor.execute(
+                        """
+                        SELECT DISTINCT qq.question_id
+                        FROM quiz_questions qq
+                        WHERE qq.quiz_id = %s
+                        ORDER BY qq.question_id
+                        """,
+                        (quiz_id,)
+                    )
+                    all_ids = [r[0] for r in cursor.fetchall()]
+                    if all_ids:
+                        selected_q_ids = random.sample(all_ids, min(10, len(all_ids)))
+                        cursor.execute(
+                            "UPDATE quiz_attempts SET selected_question_ids = %s WHERE attempt_id = %s",
+                            (json.dumps(selected_q_ids), attempt_id)
+                        )
+                        conn.commit()
+
+                session[f"quiz_{attempt_id}_questions"] = selected_q_ids
             else:
-                # Brand new quiz attempt: always starts fresh at 00:00
+                # Brand new quiz attempt: select exactly 10 questions randomly from question pool
                 cursor.execute(
                     """
-                    INSERT INTO quiz_attempts (student_id, quiz_id, started_at)
-                    VALUES (%s, %s, CURRENT_TIMESTAMP)
+                    SELECT DISTINCT qq.question_id
+                    FROM quiz_questions qq
+                    WHERE qq.quiz_id = %s
+                    ORDER BY qq.question_id
+                    """,
+                    (quiz_id,)
+                )
+                all_ids = [r[0] for r in cursor.fetchall()]
+
+                if not all_ids:
+                    flash("No questions found for this quiz.", "warning")
+                    return redirect(url_for("available_quizzes"))
+
+                sample_size = min(10, len(all_ids))
+                selected_q_ids = random.sample(all_ids, sample_size)
+
+                cursor.execute(
+                    """
+                    INSERT INTO quiz_attempts (student_id, quiz_id, started_at, selected_question_ids)
+                    VALUES (%s, %s, CURRENT_TIMESTAMP, %s)
                     RETURNING attempt_id, started_at
                     """,
-                    (student_id, quiz_id)
+                    (student_id, quiz_id, json.dumps(selected_q_ids))
                 )
                 new_att = cursor.fetchone()
                 attempt_id = new_att[0]
@@ -1125,8 +1246,9 @@ def start_quiz(quiz_id):
                 conn.commit()
                 session["active_quiz_attempt_id"] = attempt_id
                 session["active_quiz_id"] = quiz_id
+                session[f"quiz_{attempt_id}_questions"] = selected_q_ids
 
-            # Load questions for the student (do NOT select correct_option here)
+            # Load the selected 10 questions in consistent, established order
             cursor.execute(
                 """
                 SELECT
@@ -1136,15 +1258,14 @@ def start_quiz(quiz_id):
                     q.option_b,
                     q.option_c,
                     q.option_d
-                FROM quiz_questions qq
-                JOIN questions q
-                    ON qq.question_id = q.question_id
-                WHERE qq.quiz_id = %s
-                ORDER BY q.question_id
+                FROM questions q
+                WHERE q.question_id = ANY(%s)
                 """,
-                (quiz_id,)
+                (selected_q_ids,)
             )
-            questions = cursor.fetchall()
+            raw_questions = cursor.fetchall()
+            questions_by_id = {q[0]: q for q in raw_questions}
+            questions = [questions_by_id[qid] for qid in selected_q_ids if qid in questions_by_id]
 
             if not questions:
                 flash("No questions found for this quiz.", "warning")
@@ -1177,7 +1298,7 @@ def start_quiz(quiz_id):
 
             cursor.execute(
                 """
-                SELECT started_at, submitted_at
+                SELECT started_at, submitted_at, selected_question_ids
                 FROM quiz_attempts
                 WHERE attempt_id = %s
                 AND student_id = %s
@@ -1198,29 +1319,49 @@ def start_quiz(quiz_id):
 
             started_at = attempt[0]
 
+            # Retrieve the 10 selected question IDs
+            selected_q_ids = session.get(f"quiz_{attempt_id}_questions")
+            if not selected_q_ids and attempt[2]:
+                if isinstance(attempt[2], list):
+                    selected_q_ids = attempt[2]
+                elif isinstance(attempt[2], str):
+                    try:
+                        selected_q_ids = json.loads(attempt[2])
+                    except Exception:
+                        selected_q_ids = None
+
+            if not selected_q_ids:
+                cursor.execute(
+                    """
+                    SELECT qq.question_id
+                    FROM quiz_questions qq
+                    WHERE qq.quiz_id = %s
+                    ORDER BY qq.question_id
+                    LIMIT 10
+                    """,
+                    (quiz_id,)
+                )
+                selected_q_ids = [r[0] for r in cursor.fetchall()]
+
             cursor.execute(
                 """
                 SELECT q.question_id, q.correct_option
-                FROM quiz_questions qq
-                JOIN questions q
-                    ON qq.question_id = q.question_id
-                WHERE qq.quiz_id = %s
-                ORDER BY q.question_id
+                FROM questions q
+                WHERE q.question_id = ANY(%s)
                 """,
-                (quiz_id,)
+                (selected_q_ids,)
             )
-            questions = cursor.fetchall()
+            raw_correct = cursor.fetchall()
+            correct_map = {r[0]: r[1] for r in raw_correct}
 
-            total_questions = len(questions)
+            total_questions = len(selected_q_ids)
             correct_answers = 0
 
             # Delete any partial previous answers for this attempt before re-recording
             cursor.execute("DELETE FROM student_answers WHERE attempt_id = %s", (attempt_id,))
 
-            for question in questions:
-                question_id = question[0]
-                correct_option = question[1]
-
+            for question_id in selected_q_ids:
+                correct_option = correct_map.get(question_id)
                 selected_option = request.form.get(f"question_{question_id}")
 
                 if selected_option not in ["A", "B", "C", "D"]:
@@ -1254,7 +1395,8 @@ def start_quiz(quiz_id):
                     correct_answers = %s,
                     score = %s,
                     accuracy = %s,
-                    time_taken_seconds = %s
+                    time_taken_seconds = %s,
+                    selected_question_ids = %s
                 WHERE attempt_id = %s
                 """,
                 (
@@ -1263,6 +1405,7 @@ def start_quiz(quiz_id):
                     score,
                     accuracy,
                     time_taken,
+                    json.dumps(selected_q_ids),
                     attempt_id
                 )
             )
@@ -1311,6 +1454,7 @@ def start_quiz(quiz_id):
             # Clear active quiz session tracking upon submission
             session.pop("active_quiz_attempt_id", None)
             session.pop("active_quiz_id", None)
+            session.pop(f"quiz_{attempt_id}_questions", None)
 
             flash(f"Quiz submitted successfully! You scored {correct_answers}/{total_questions} ({score}%).", "success")
             return redirect(url_for("view_quiz_result", attempt_id=attempt_id))

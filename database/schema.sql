@@ -90,7 +90,8 @@ CREATE TABLE IF NOT EXISTS quiz_attempts (
     correct_answers INT DEFAULT 0,
     score NUMERIC(5,2) DEFAULT 0.00,
     accuracy NUMERIC(5,2) DEFAULT 0.00,
-    time_taken_seconds INT DEFAULT 0
+    time_taken_seconds INT DEFAULT 0,
+    selected_question_ids JSONB
 );
 
 -- 8. Student Answers Table
@@ -169,3 +170,14 @@ CREATE INDEX IF NOT EXISTS idx_retention_schedules_student ON retention_schedule
 CREATE INDEX IF NOT EXISTS idx_retention_schedules_quiz ON retention_schedules(quiz_id);
 CREATE INDEX IF NOT EXISTS idx_ai_quiz_attempts_student ON ai_quiz_attempts(student_id);
 CREATE INDEX IF NOT EXISTS idx_ai_quiz_attempts_submitted ON ai_quiz_attempts(submitted_at);
+
+-- Question Bank Uniqueness (Enforces zero duplicates across all formatting/spacing/capitalization)
+CREATE OR REPLACE FUNCTION normalize_question_text(input_text TEXT)
+RETURNS TEXT AS $$
+BEGIN
+    RETURN lower(regexp_replace(regexp_replace(trim(input_text), '[^a-zA-Z0-9]+', ' ', 'g'), '\s+', ' ', 'g'));
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_questions_normalized_unique 
+ON questions (normalize_question_text(question_text));
